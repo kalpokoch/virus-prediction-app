@@ -1,153 +1,499 @@
+"""
+Streamlit Web Application for Virus Prediction System
+Uses unified 80/20 split knowledge base
+"""
+
 import streamlit as st
 import pandas as pd
 import json
+import os
 from model import JSONVirusPredictionModel
 
-# Page config
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
 st.set_page_config(
     page_title="Virus Prediction System",
     page_icon="🦠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize model
+
+# ============================================================
+# INITIALIZE MODEL
+# ============================================================
+
 @st.cache_resource
 def load_model():
-    return JSONVirusPredictionModel('virus_probabilities.json')
+    """Load knowledge base from unified split"""
+    kb_path = 'knowledge_base_unified.json'
+    
+    # Check if file exists
+    if not os.path.exists(kb_path):
+        st.error(f"❌ Knowledge base file not found: {kb_path}")
+        st.info("Please ensure `knowledge_base_unified.json` is in the same directory as the app")
+        st.stop()
+    
+    try:
+        return JSONVirusPredictionModel(kb_path)
+    except Exception as e:
+        st.error(f"❌ Error loading model: {str(e)}")
+        st.stop()
 
-model = load_model()
 
-# Load knowledge base metadata
-with open('virus_probabilities.json', 'r') as f:
-    kb = json.load(f)
+try:
+    model = load_model()
+    kb = model.kb
+except Exception as e:
+    st.error(f"❌ Failed to initialize: {str(e)}")
+    st.stop()
 
-# Title and description
+
+# ============================================================
+# TITLE AND DESCRIPTION
+# ============================================================
+
 st.title("🦠 AI-Powered Virus Prediction System")
-st.markdown("*Probabilistic diagnostic tool using Naive Bayes inference*")
 
-# Sidebar - Model Info
+col1, col2, col3 = st.columns([2, 1, 1])
+with col1:
+    st.markdown("""
+    **Probabilistic diagnostic tool using Naive Bayes inference**
+    - Trained on ICMR Virus Research Dataset
+    - Unified 80/20 split methodology
+    - 83 viruses, 35 symptoms, 32 states
+    """)
+with col2:
+    st.markdown(f"""
+    **✅ Model Status**
+    - Version: {kb['metadata']['version']}
+    - Viruses: {kb['metadata']['total_viruses']}
+    - Ready for predictions
+    """)
+with col3:
+    st.markdown(f"""
+    **📊 Data Overview**
+    - Training: 80%
+    - Testing: 20%
+    - Split: Unified
+    """)
+
+
+# ============================================================
+# SIDEBAR - MODEL INFO
+# ============================================================
+
 with st.sidebar:
     st.header("📊 Model Statistics")
-    st.metric("Total Viruses", kb['metadata']['total_viruses'])
-    st.metric("Total Samples", f"{kb['metadata']['total_samples']:,}")
-    st.metric("Positive Cases", f"{kb['metadata']['total_positive']:,}")
-    st.metric("States Covered", kb['metadata']['total_states'])
-    st.metric("Symptoms Tracked", kb['metadata']['total_symptoms'])
+    
+    # Model metrics
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Viruses", kb['metadata']['total_viruses'])
+        st.metric("States", kb['metadata']['total_states'])
+    with col2:
+        st.metric("Symptoms", kb['metadata']['total_symptoms'])
+        st.metric("Seasons", len(kb['metadata']['seasons']))
+    
+    st.metric("Training Samples", f"{kb['metadata']['training_rows']['priors']:,}")
+    st.metric("Test Samples", f"{kb['metadata']['test_rows']:,}")
     
     st.markdown("---")
-    st.info("**Data Source**: ICMR Virus Research Dataset")
-
-# Main interface
-tab1, tab2 = st.tabs(["🔍 Single Prediction", "📁 Batch Prediction"])
-
-# TAB 1: Single Prediction
-with tab1:
-    st.header("Patient Diagnosis")
     
+    # Data split info
+    with st.expander("ℹ️ Data Split Details"):
+        st.info(f"""
+        **Split Method**: {kb['metadata'].get('data_split', 'Unified 80/20')}
+        
+        **Training Data**:
+        - Priors: {kb['metadata']['training_rows']['priors']} viruses
+        - State patterns: {kb['metadata']['training_rows']['state']} pairs
+        - Season patterns: {kb['metadata']['training_rows']['season']} pairs
+        - Symptom patterns: {kb['metadata']['training_rows']['symptom']} pairs
+        
+        **Test Data**: {kb['metadata']['test_rows']} samples
+        
+        **Notes**: {kb['metadata'].get('notes', 'N/A')}
+        """)
+    
+    st.markdown("---")
+    
+    with st.expander("🧠 Model Algorithm"):
+        st.write("""
+        **Naive Bayes Inference**
+        
+        Formula:
+        ```
+        P(V|S,Sea,Sy) ∝ P(V) × P(S|V) × P(Sea|V) × ∏P(Sy_i|V)
+        ```
+        
+        Where:
+        - V = Virus
+        - S = State
+        - Sea = Season
+        - Sy = Symptoms
+        """)
+    
+    st.markdown("---")
+    st.caption("Built with Streamlit | Knowledge Base v2.0")
+
+
+# ============================================================
+# MAIN INTERFACE - TABS
+# ============================================================
+
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Single Prediction", "📁 Batch Processing", "📊 Model Info", "ℹ️ About"])
+
+
+# ============================================================
+# TAB 1: SINGLE PREDICTION
+# ============================================================
+
+with tab1:
+    st.header("🏥 Patient Diagnosis")
+    st.markdown("Enter patient information to predict possible viral infections")
+    
+    # Input section
     col1, col2 = st.columns(2)
     
     with col1:
+        st.subheader("📍 Location & Time")
+        
         # Get available states
-        all_states = sorted(set([s for v in kb['state_probabilities'].values() for s in v.keys()]))
-        state = st.selectbox("Select State", all_states)
+        available_states = model.get_available_states()
+        state = st.selectbox(
+            "Select State",
+            available_states,
+            help="Select the patient's location in India"
+        )
         
-        season = st.selectbox("Select Season", 
-                             ["Fall", "Winter", "Summer", "Spring"])
-    
-    with col2:
-        # Get all available symptoms
-        all_symptoms = sorted(set([s for v in kb['symptom_probabilities'].values() for s in v.keys()]))
-        
-        st.markdown("**Select Symptoms:**")
-        symptoms = st.multiselect(
-            "Search and select symptoms",
-            all_symptoms,
-            help="Start typing to search symptoms"
+        season = st.selectbox(
+            "Select Season",
+            model.get_available_seasons(),
+            help="Select the current season"
         )
     
-    # Predict button
-    if st.button("🔬 Predict Virus", type="primary", use_container_width=True):
-        if not symptoms:
-            st.warning("⚠️ Please select at least one symptom")
-        else:
-            with st.spinner("Analyzing patient data..."):
-                predictions = model.predict_single(state, season, symptoms)
-            
-            st.success("✅ Analysis Complete!")
-            
-            # Display results
-            st.subheader("Top 5 Predicted Viruses")
-            
-            for i, pred in enumerate(predictions, 1):
-                virus = pred['virus']
-                prob = pred['probability']
+    with col2:
+        st.subheader("🩺 Symptoms")
+        
+        # Get all available symptoms
+        available_symptoms = model.get_available_symptoms()
+        
+        symptoms = st.multiselect(
+            "Select Patient Symptoms",
+            available_symptoms,
+            help="Search and select observed symptoms"
+        )
+    
+    # Prediction section
+    st.divider()
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col1:
+        if st.button("🔬 Generate Prediction", type="primary", use_container_width=True):
+            if not symptoms:
+                st.warning("⚠️ Please select at least one symptom for prediction")
+            else:
+                with st.spinner("Analyzing patient data..."):
+                    predictions = model.predict_single(state, season, symptoms)
                 
-                # Color code by probability
-                if prob > 0.3:
-                    color = "green"
-                elif prob > 0.1:
-                    color = "orange"
-                else:
-                    color = "red"
+                st.success("✅ Analysis Complete!")
                 
-                col1, col2, col3 = st.columns([1, 3, 2])
-                with col1:
-                    st.markdown(f"### #{i}")
-                with col2:
-                    st.markdown(f"**{virus}**")
-                with col3:
+                # Display results
+                st.subheader("Top 5 Predicted Viruses")
+                
+                results_data = []
+                
+                for i, pred in enumerate(predictions, 1):
+                    virus = pred['virus']
+                    prob = pred['probability']
+                    
+                    results_data.append({
+                        'Rank': i,
+                        'Virus': virus,
+                        'Probability': prob,
+                        'Percentage': f"{prob*100:.2f}%"
+                    })
+                    
+                    # Color code
+                    if prob > 0.30:
+                        status = "🟢 High"
+                        color = "green"
+                    elif prob > 0.10:
+                        status = "🟡 Medium"
+                        color = "orange"
+                    else:
+                        status = "🔴 Low"
+                        color = "red"
+                    
+                    # Display
+                    col_rank, col_virus, col_status, col_prob = st.columns([0.5, 2.5, 1.5, 1.5])
+                    
+                    with col_rank:
+                        st.markdown(f"### #{i}")
+                    with col_virus:
+                        st.markdown(f"**{virus}**")
+                    with col_status:
+                        st.markdown(f"{status}")
+                    with col_prob:
+                        st.markdown(f"`{prob*100:.2f}%`")
+                    
                     st.progress(prob)
-                    st.markdown(f":{color}[**{prob*100:.2f}%**]")
                 
-                st.divider()
-            
-            # Visualization
-            df_results = pd.DataFrame(predictions)
-            st.bar_chart(df_results.set_index('virus')['probability'])
+                # Visualization
+                st.subheader("📈 Probability Distribution")
+                df_results = pd.DataFrame(results_data)
+                st.bar_chart(df_results.set_index('Virus')['Probability'])
+                
+                # Summary
+                st.subheader("📋 Prediction Summary")
+                summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+                
+                with summary_col1:
+                    st.metric("State", state)
+                with summary_col2:
+                    st.metric("Season", season)
+                with summary_col3:
+                    st.metric("Symptoms", len(symptoms))
+                with summary_col4:
+                    st.metric("Top Match", predictions[0]['virus'])
+    
+    with col2:
+        st.info("""
+        **How it works:**
+        1. Select patient's location
+        2. Choose current season
+        3. Check observed symptoms
+        4. Click "Generate Prediction"
+        
+        The system uses Naive Bayes to calculate probabilities.
+        """)
+    
+    with col3:
+        st.warning("""
+        **Important Notes:**
+        - Results are probabilistic
+        - Not a substitute for medical diagnosis
+        - Consult healthcare professionals
+        - Multiple viruses may be possible
+        """)
 
-# TAB 2: Batch Prediction
+
+# ============================================================
+# TAB 2: BATCH PROCESSING
+# ============================================================
+
 with tab2:
-    st.header("Batch Processing")
-    st.markdown("Upload a CSV file with columns: `State`, `Season`, and symptom columns (0/1 for absence/presence)")
+    st.header("📁 Batch Processing")
+    st.markdown("""
+    Process multiple patients at once. Upload a CSV file with:
+    - **State**: Patient's state (must match available states)
+    - **Season**: Season (Fall, Winter, Summer, Spring)
+    - **Symptoms**: Binary columns (0=absent, 1=present)
+    """)
     
     # File uploader
-    uploaded_file = st.file_uploader("Choose CSV file", type=['csv'])
+    uploaded_file = st.file_uploader(
+        "Upload CSV file",
+        type=['csv'],
+        help="CSV with State, Season, and symptom columns"
+    )
     
     if uploaded_file is not None:
-        # Read uploaded file
-        input_df = pd.read_csv(uploaded_file)
+        try:
+            input_df = pd.read_csv(uploaded_file)
+            
+            st.subheader("📋 Input Data Preview")
+            st.dataframe(input_df.head(10), use_container_width=True)
+            st.info(f"Total records: {len(input_df)}")
+            
+            # Validate columns
+            required_cols = ['State', 'Season']
+            missing_cols = [col for col in required_cols if col not in input_df.columns]
+            
+            if missing_cols:
+                st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+            else:
+                if st.button("🚀 Process Batch", type="primary", use_container_width=True):
+                    with st.spinner(f"Processing {len(input_df)} predictions..."):
+                        output_df = model.predict_batch(input_df)
+                    
+                    st.success(f"✅ Successfully processed {len(output_df)} records!")
+                    
+                    # Results
+                    st.subheader("🔍 Results Preview")
+                    
+                    display_cols = [col for col in output_df.columns 
+                                   if col in ['State', 'Season', 'Top1_Virus', 'Top1_Probability', 
+                                             'Top2_Virus', 'Top2_Probability', 'Top3_Virus']]
+                    
+                    st.dataframe(output_df[display_cols].head(15), use_container_width=True)
+                    
+                    # Statistics
+                    st.subheader("📊 Batch Statistics")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Total Processed", len(output_df))
+                    with col2:
+                        top_virus = output_df['Top1_Virus'].value_counts().index[0]
+                        st.metric("Most Common Prediction", top_virus)
+                    with col3:
+                        avg_prob = output_df['Top1_Probability'].mean() * 100
+                        st.metric("Avg Top1 Confidence", f"{avg_prob:.2f}%")
+                    with col4:
+                        max_prob = output_df['Top1_Probability'].max() * 100
+                        st.metric("Max Confidence", f"{max_prob:.2f}%")
+                    
+                    # Download
+                    csv = output_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download Results (CSV)",
+                        data=csv,
+                        file_name=f"predictions_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
         
-        st.subheader("Input Data Preview")
-        st.dataframe(input_df.head(), use_container_width=True)
-        
-        if st.button("🚀 Process Batch", type="primary"):
-            with st.spinner("Processing batch predictions..."):
-                # Save temp file
-                input_df.to_csv('temp_input.csv', index=False)
-                
-                # Run batch prediction
-                output_df = model.predict_batch('temp_input.csv', 'temp_output.csv')
-                
-                st.success(f"✅ Processed {len(output_df)} records!")
-                
-                # Show results
-                st.subheader("Results Preview")
-                st.dataframe(output_df.head(10), use_container_width=True)
-                
-                # Download button
-                csv = output_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download Full Results",
-                    data=csv,
-                    file_name="virus_predictions.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+        except Exception as e:
+            st.error(f"❌ Error processing file: {str(e)}")
 
-# Footer
+
+# ============================================================
+# TAB 3: MODEL INFORMATION
+# ============================================================
+
+with tab3:
+    st.header("📊 Model Information")
+    
+    # Overview
+    st.subheader("🎯 Model Overview")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Algorithm", "Naive Bayes")
+    with col2:
+        st.metric("Version", kb['metadata']['version'])
+    with col3:
+        st.metric("Created", kb['metadata']['created_date'])
+    
+    # Data summary
+    st.subheader("📚 Dataset Summary")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Training Samples", f"{kb['metadata']['training_rows']['priors']:,}")
+    with col2:
+        st.metric("Test Samples", f"{kb['metadata']['test_rows']:,}")
+    with col3:
+        st.metric("Total Samples", f"{kb['metadata']['training_rows']['priors'] + kb['metadata']['test_rows']:,}")
+    with col4:
+        st.metric("Split Ratio", "80/20")
+    
+    # Training details
+    st.subheader("📝 Training Data Details")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Viruses", kb['metadata']['training_rows']['priors'])
+    with col2:
+        st.metric("State-Virus Pairs", kb['metadata']['training_rows']['state'])
+    with col3:
+        st.metric("Season Patterns", kb['metadata']['training_rows']['season'])
+    with col4:
+        st.metric("Symptom Patterns", kb['metadata']['training_rows']['symptom'])
+    
+    # Limitations
+    st.subheader("⚠️ Model Limitations")
+    st.warning("""
+    1. **Test Set**: 14 rare viruses excluded (had <2 samples)
+    2. **Class Imbalance**: Dengue represents ~45% of training data
+    3. **Assumptions**: Assumes symptom independence given virus
+    4. **Geographic Limit**: Works only for 32 Indian states
+    5. **Minimum Input**: Requires at least 1 symptom for prediction
+    6. **Not Medical Advice**: For reference only, not diagnostic
+    """)
+    
+    # Metadata
+    st.subheader("📋 Complete Metadata")
+    st.json(kb['metadata'])
+
+
+# ============================================================
+# TAB 4: ABOUT
+# ============================================================
+
+with tab4:
+    st.header("ℹ️ About This System")
+    
+    st.subheader("🎯 Purpose")
+    st.write("""
+    This system provides probabilistic predictions for viral infections based on:
+    - Patient's geographic location (state)
+    - Current season
+    - Observed symptoms
+    
+    It uses Naive Bayes inference trained on ICMR virus research data.
+    """)
+    
+    st.subheader("🔬 Technology")
+    st.write("""
+    - **Algorithm**: Naive Bayes with conditional independence
+    - **Training**: 80% of unified dataset (unified 80/20 split)
+    - **Testing**: Evaluated on 20% holdout test set
+    - **Framework**: Streamlit web application
+    - **Language**: Python
+    """)
+    
+    st.subheader("📊 Dataset")
+    st.write(f"""
+    - **Source**: ICMR Virus Research Dataset
+    - **Total Samples**: {kb['metadata']['training_rows']['priors'] + kb['metadata']['test_rows']:,}
+    - **Viruses**: {kb['metadata']['total_viruses']}
+    - **Symptoms**: {kb['metadata']['total_symptoms']}
+    - **Geographic Coverage**: {kb['metadata']['total_states']} Indian states
+    - **Temporal Coverage**: Multiple seasons (Fall, Winter, Summer, Spring)
+    """)
+    
+    st.subheader("⚕️ Medical Disclaimer")
+    st.error("""
+    **IMPORTANT**: This tool is for educational and reference purposes only.
+    
+    - NOT a substitute for professional medical diagnosis
+    - Results are probabilistic estimates, not certainties
+    - Always consult qualified healthcare professionals
+    - In case of emergency, seek immediate medical attention
+    - Do not rely solely on this tool for medical decisions
+    """)
+    
+    st.subheader("📖 How to Use")
+    st.write("""
+    1. **Single Prediction**: Use the "Single Prediction" tab for one patient
+    2. **Batch Processing**: Use the "Batch Processing" tab for multiple patients
+    3. **Model Info**: Check model details and statistics
+    4. **Results**: View and download predictions in CSV format
+    """)
+    
+    st.subheader("📞 Contact & Support")
+    st.info("""
+    For issues or questions:
+    - Check the Model Info tab for technical details
+    - Ensure your input data matches required format
+    - Verify knowledge_base_unified.json is present
+    - Check Streamlit console for error messages
+    """)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center'>
+<div style='text-align: center; color: #888; font-size: 0.9em;'>
+    <p>🦠 <b>Virus Prediction System</b> | Knowledge Base v2.0 (Unified Split)</p>
     <p>Built with Streamlit | Powered by Naive Bayes Inference</p>
+    <p>Data Source: ICMR Virus Research Dataset</p>
 </div>
 """, unsafe_allow_html=True)
