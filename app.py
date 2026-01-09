@@ -9,7 +9,7 @@ import xgboost as xgb
 # Page configuration
 st.set_page_config(
     page_title="Virus Detection System",
-    page_icon="🦠",
+    page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -89,7 +89,7 @@ def create_feature_vector(patient_data):
 
     # Fill missing values
     feature_df['age'] = feature_df['age'].fillna(30).clip(0, 120)
-    feature_df['durationofillness'] = feature_df['durationofillness'].fillna(0)
+    feature_df['duration_of_illness'] = feature_df['duration_of_illness'].fillna(0)
 
     # Fill all symptoms with 0
     symptom_cols = list(sum(SYMPTOM_GROUPS.values(), []))
@@ -99,10 +99,10 @@ def create_feature_vector(patient_data):
         feature_df[col] = feature_df[col].fillna(0).clip(0, 1)
 
     # === AGE FEATURES ===
-    feature_df['agegroup'] = pd.cut(feature_df['age'], 
+    feature_df['age_group'] = pd.cut(feature_df['age'], 
                                    bins=[0, 5, 18, 45, 65, 150], 
-                                   labels=[0, 1, 2, 3, 4]).astype(int)
-    feature_df['agegroup'] = feature_df['agegroup'].fillna(2)
+                                   labels=[0, 1, 2, 3, 4]).cat.codes
+    feature_df['age_group'] = feature_df['age_group'].replace(-1, 2)
 
     # === SYMPTOM GROUPS ===
     respiratory_cols = ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']
@@ -126,8 +126,8 @@ def create_feature_vector(patient_data):
     # === GEO-TEMPORAL FEATURES ===
     month = patient_data.get('month', 1)
     feature_df['month'] = month
-    feature_df['ismonsoon'] = int(month in [6, 7, 8, 9])
-    feature_df['iswinter'] = int(month in [12, 1, 2])
+    feature_df['is_monsoon'] = int(month in [6, 7, 8, 9])
+    feature_df['is_winter'] = int(month in [12, 1, 2])
 
     def get_season(m):
         if m in [12, 1, 2]: return 0
@@ -141,34 +141,34 @@ def create_feature_vector(patient_data):
 
     # === INTERACTION FEATURES ===
     # Geo-temporal interactions
-    feature_df['monsoon_respiratory'] = feature_df['ismonsoon'] * feature_df['respiratory_symptoms']
-    feature_df['winter_respiratory'] = feature_df['iswinter'] * feature_df['respiratory_symptoms']
-    feature_df['monsoon_fever'] = feature_df['ismonsoon'] * feature_df['FEVER']
+    feature_df['monsoon_respiratory'] = feature_df['is_monsoon'] * feature_df['respiratory_symptoms']
+    feature_df['winter_respiratory'] = feature_df['is_winter'] * feature_df['respiratory_symptoms']
+    feature_df['monsoon_fever'] = feature_df['is_monsoon'] * feature_df['FEVER']
 
-    feature_df['state_season'] = patient_data['labstate'] * 10 + feature_df['season']
-    feature_df['district_season'] = patient_data['districtencoded'] * 10 + feature_df['season']
-    feature_df['district_month'] = patient_data['districtencoded'] * 100 + feature_df['month']
+    feature_df['state_season'] = patient_data['lab_state'] * 10 + feature_df['season']
+    feature_df['district_season'] = patient_data['district_encoded'] * 10 + feature_df['season']
+    feature_df['district_month'] = patient_data['district_encoded'] * 100 + feature_df['month']
 
-    feature_df['state_respiratory'] = patient_data['labstate'] * feature_df['respiratory_symptoms']
-    feature_df['state_fever'] = patient_data['labstate'] * feature_df['FEVER']
-    feature_df['state_gi'] = patient_data['labstate'] * feature_df['gi_symptoms']
+    feature_df['state_respiratory'] = patient_data['lab_state'] * feature_df['respiratory_symptoms']
+    feature_df['state_fever'] = patient_data['lab_state'] * feature_df['FEVER']
+    feature_df['state_gi'] = patient_data['lab_state'] * feature_df['gi_symptoms']
 
     # Fever interactions
     feature_df['fever_respiratory'] = feature_df['FEVER'] * feature_df['respiratory_symptoms']
     feature_df['fever_gi'] = feature_df['FEVER'] * feature_df['gi_symptoms']
     feature_df['fever_neuro'] = feature_df['FEVER'] * feature_df['neuro_symptoms']
     feature_df['fever_skin'] = feature_df['FEVER'] * feature_df['skin_symptoms']
-    feature_df['fever_duration'] = feature_df['FEVER'] * feature_df['durationofillness']
+    feature_df['fever_duration'] = feature_df['FEVER'] * feature_df['duration_of_illness']
     feature_df['fever_headache'] = feature_df['FEVER'] * feature_df['HEADACHE']
     feature_df['fever_cough'] = feature_df['FEVER'] * feature_df['COUGH']
 
     # Severity & demographic interactions
-    feature_df['severity_score'] = feature_df['symptom_count'] * feature_df['durationofillness']
+    feature_df['severity_score'] = feature_df['symptom_count'] * feature_df['duration_of_illness']
     feature_df['age_symptom'] = feature_df['age'] * feature_df['symptom_count']
-    feature_df['age_duration'] = feature_df['age'] * feature_df['durationofillness']
-    feature_df['patienttype_age'] = patient_data['PATIENTTYPE'] * feature_df['agegroup']
+    feature_df['age_duration'] = feature_df['age'] * feature_df['duration_of_illness']
+    feature_df['patienttype_age'] = patient_data['PATIENTTYPE'] * feature_df['age_group']
     feature_df['sex_respiratory'] = patient_data['SEX'] * feature_df['respiratory_symptoms']
-    feature_df['duration_symptom_ratio'] = feature_df['durationofillness'] / (feature_df['symptom_count'] + 1)
+    feature_df['duration_symptom_ratio'] = feature_df['duration_of_illness'] / (feature_df['symptom_count'] + 1)
 
     # Year features (use current year)
     year = patient_data.get('year', 2024)
@@ -178,8 +178,8 @@ def create_feature_vector(patient_data):
     # Quarter, week, day of year
     date = datetime(year, month, 1)
     feature_df['quarter'] = (month - 1) // 3 + 1
-    feature_df['weekofyear'] = date.isocalendar()[1]
-    feature_df['dayofyear'] = date.timetuple().tm_yday
+    feature_df['week_of_year'] = date.isocalendar()[1]
+    feature_df['day_of_year'] = date.timetuple().tm_yday
 
     # Final cleanup
     feature_df = feature_df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -187,7 +187,7 @@ def create_feature_vector(patient_data):
     return feature_df.iloc[0].values.reshape(1, -1)
 
 def main():
-    st.title("🦠 Virus Detection and Classification System")
+    st.title("Virus Detection and Classification System")
     st.markdown("---")
     st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
 
@@ -203,7 +203,7 @@ def main():
         return
 
     # Sidebar for patient demographics
-    st.sidebar.header("📋 Patient Information")
+    st.sidebar.header("Patient Information")
 
     patient_data = {}
 
@@ -213,13 +213,13 @@ def main():
                                                 format_func=lambda x: "Female" if x == 0 else "Male")
     patient_data['PATIENTTYPE'] = st.sidebar.selectbox("Patient Type", options=[0, 1], 
                                                         format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
-    patient_data['durationofillness'] = st.sidebar.number_input("Duration of Illness (days)", 
+    patient_data['duration_of_illness'] = st.sidebar.number_input("Duration of Illness (days)", 
                                                                  min_value=0, max_value=365, value=3)
     
     # State selection with names
     state_names = state_map['state_name'].tolist()
     selected_state_name = st.sidebar.selectbox("State", options=state_names, index=0)
-    patient_data['labstate'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
+    patient_data['lab_state'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
     
     # District selection filtered by state
     filtered_districts = district_state_map[district_state_map['state'] == selected_state_name]
@@ -227,10 +227,10 @@ def main():
     
     if len(district_names) > 0:
         selected_district_name = st.sidebar.selectbox("District", options=district_names, index=0)
-        patient_data['districtencoded'] = int(filtered_districts[filtered_districts['district_name'] == selected_district_name]['district_encoded'].values[0])
+        patient_data['district_encoded'] = int(filtered_districts[filtered_districts['district_name'] == selected_district_name]['district_encoded'].values[0])
     else:
         st.sidebar.warning("No districts available for selected state")
-        patient_data['districtencoded'] = 0
+        patient_data['district_encoded'] = 0
 
     # Temporal features
     patient_data['month'] = st.sidebar.selectbox("Month of Illness", options=list(range(1, 13)), 
@@ -238,7 +238,7 @@ def main():
     patient_data['year'] = st.sidebar.number_input("Year", min_value=2012, max_value=2026, value=2024)
 
     # Main area for symptoms
-    st.header("🩺 Clinical Symptoms")
+    st.header("Clinical Symptoms")
     st.write("Select all symptoms present in the patient:")
 
     for group_name, symptoms in SYMPTOM_GROUPS.items():
@@ -251,70 +251,77 @@ def main():
     st.markdown("---")
 
     # Prediction button
-    if st.button("🔍 Predict Virus", type="primary", use_container_width=True):
-        with st.spinner("Analyzing patient data..."):
-            try:
-                # Create feature vector
-                X = create_feature_vector(patient_data)
+    if st.button("Predict Virus", type="primary", use_container_width=True):
+        # Check if at least one symptom is selected
+        all_symptoms = list(sum(SYMPTOM_GROUPS.values(), []))
+        selected_symptoms = sum([patient_data.get(symptom, 0) for symptom in all_symptoms])
+        
+        if selected_symptoms == 0:
+            st.warning("Please select at least one symptom before making a prediction.")
+        else:
+            with st.spinner("Analyzing patient data..."):
+                try:
+                    # Create feature vector
+                    X = create_feature_vector(patient_data)
 
-                # Make prediction
-                y_pred = model.predict(X)[0]
-                y_pred_proba = model.predict_proba(X)[0]
+                    # Make prediction
+                    y_pred = model.predict(X)[0]
+                    y_pred_proba = model.predict_proba(X)[0]
 
-                # Get top 5 predictions
-                top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
+                    # Get top 5 predictions
+                    top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
 
-                # Display results
-                st.success("✅ Prediction Complete!")
+                    # Display results
+                    st.success("Prediction Complete!")
 
-                col1, col2 = st.columns([1, 1])
+                    col1, col2 = st.columns([1, 1])
 
-                with col1:
-                    st.subheader("🎯 Most Likely Virus")
-                    st.metric(
-                        label="Predicted Virus",
-                        value=VIRUS_MAPPING[y_pred],
-                        delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
-                    )
+                    with col1:
+                        st.subheader("Most Likely Virus")
+                        st.metric(
+                            label="Predicted Virus",
+                            value=VIRUS_MAPPING[y_pred],
+                            delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
+                        )
 
-                with col2:
-                    st.subheader("📊 Top 5 Predictions")
-                    for rank, idx in enumerate(top_5_indices, 1):
-                        virus_name = VIRUS_MAPPING[idx]
-                        confidence = y_pred_proba[idx] * 100
-                        st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
+                    with col2:
+                        st.subheader("Top 5 Predictions")
+                        for rank, idx in enumerate(top_5_indices, 1):
+                            virus_name = VIRUS_MAPPING[idx]
+                            confidence = y_pred_proba[idx] * 100
+                            st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
 
-                # Display probability distribution
-                st.markdown("---")
-                st.subheader("📈 Probability Distribution (Top 10)")
+                    # Display probability distribution
+                    st.markdown("---")
+                    st.subheader("Probability Distribution (Top 10)")
 
-                top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
-                prob_df = pd.DataFrame({
-                    'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
-                    'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
-                })
-                st.bar_chart(prob_df.set_index('Virus'))
+                    top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
+                    prob_df = pd.DataFrame({
+                        'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
+                        'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
+                    })
+                    st.bar_chart(prob_df.set_index('Virus'))
 
-                # Feature summary
-                with st.expander("📋 Input Summary"):
-                    st.write("**Patient Demographics:**")
-                    st.write(f"- Age: {patient_data['age']} years")
-                    st.write(f"- Sex: {'Male' if patient_data['SEX'] == 1 else 'Female'}")
-                    st.write(f"- Patient Type: {'Inpatient' if patient_data['PATIENTTYPE'] == 1 else 'Outpatient'}")
-                    st.write(f"- Duration: {patient_data['durationofillness']} days")
+                    # Feature summary
+                    with st.expander("Input Summary"):
+                        st.write("**Patient Demographics:**")
+                        st.write(f"- Age: {patient_data['age']} years")
+                        st.write(f"- Sex: {'Male' if patient_data['SEX'] == 1 else 'Female'}")
+                        st.write(f"- Patient Type: {'Inpatient' if patient_data['PATIENTTYPE'] == 1 else 'Outpatient'}")
+                        st.write(f"- Duration: {patient_data['duration_of_illness']} days")
 
-                    active_symptoms = [k.replace('_', ' ').title() for k, v in patient_data.items() 
-                                     if k in sum(SYMPTOM_GROUPS.values(), []) and v == 1]
-                    st.write(f"\n**Active Symptoms ({len(active_symptoms)}):**")
-                    if active_symptoms:
-                        st.write(", ".join(active_symptoms))
-                    else:
-                        st.write("None reported")
+                        active_symptoms = [k.replace('_', ' ').title() for k, v in patient_data.items() 
+                                         if k in sum(SYMPTOM_GROUPS.values(), []) and v == 1]
+                        st.write(f"\n**Active Symptoms ({len(active_symptoms)}):**")
+                        if active_symptoms:
+                            st.write(", ".join(active_symptoms))
+                        else:
+                            st.write("None reported")
 
-            except Exception as e:
-                st.error(f"Prediction error: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+                except Exception as e:
+                    st.error(f"Prediction error: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
