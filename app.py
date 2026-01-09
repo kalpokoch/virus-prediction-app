@@ -82,21 +82,35 @@ def load_mappings():
 
 def create_feature_vector(patient_data):
     """
-    Convert user inputs → 80 model features (EXACT training replica)
+    Convert user inputs → model features matching EXACT training column order
     """
-    # Step 1: Create base DataFrame with correct column names
-    feature_df = pd.DataFrame([patient_data])
+    # Step 1: Create base DataFrame - start with base features in training order
+    base_features = {
+        'lab_state': patient_data['lab_state'],
+        'age': patient_data['age'],
+        'SEX': patient_data['SEX'],
+        'PATIENTTYPE': patient_data['PATIENTTYPE'],
+        'duration_of_illness': patient_data['duration_of_illness']
+    }
+    
+    feature_df = pd.DataFrame([base_features])
+
+    # Add all symptom columns in order
+    all_symptom_cols = [
+        'HEADACHE', 'IRRITABLITY', 'ALTEREDSENSORIUM', 'SOMNOLENCE', 'NECKRIGIDITY', 'SEIZURES',
+        'DIARRHEA', 'DYSENTERY', 'NAUSEA', 'MALAISE', 'MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS',
+        'BREATHLESSNESS', 'COUGH', 'RHINORRHEA', 'SORETHROAT', 'BULLAE', 'PAPULARRASH', 
+        'PUSTULARRASH', 'MUSCULARRASH', 'MACULOPAPULARRASH', 'ESCHAR', 'DARKURINE', 
+        'HEPATOMEGALY', 'REDEYE', 'DISCHARGEEYES', 'CRUSHINGEYES', 'JAUNDICE', 'FEVER',
+        'ABDOMINALPAIN', 'VOMITING'
+    ]
+    
+    for symptom in all_symptom_cols:
+        feature_df[symptom] = patient_data.get(symptom, 0)
 
     # Fill missing values
     feature_df['age'] = feature_df['age'].fillna(30).clip(0, 120)
     feature_df['duration_of_illness'] = feature_df['duration_of_illness'].fillna(0)
-
-    # Fill all symptoms with 0
-    symptom_cols = list(sum(SYMPTOM_GROUPS.values(), []))
-    for col in symptom_cols:
-        if col not in feature_df.columns:
-            feature_df[col] = 0
-        feature_df[col] = feature_df[col].fillna(0).clip(0, 1)
 
     # === AGE FEATURES ===
     feature_df['age_group'] = pd.cut(feature_df['age'], 
@@ -125,9 +139,21 @@ def create_feature_vector(patient_data):
 
     # === GEO-TEMPORAL FEATURES ===
     month = patient_data.get('month', 1)
+    year = patient_data.get('year', 2024)
+    
     feature_df['month'] = month
+    feature_df['year'] = year
+    feature_df['quarter'] = (month - 1) // 3 + 1
+    
+    date = datetime(year, month, 1)
+    feature_df['week_of_year'] = date.isocalendar()[1]
+    feature_df['day_of_year'] = date.timetuple().tm_yday
+    
     feature_df['is_monsoon'] = int(month in [6, 7, 8, 9])
     feature_df['is_winter'] = int(month in [12, 1, 2])
+    feature_df['month_sin'] = np.sin(2 * np.pi * month / 12)
+    feature_df['month_cos'] = np.cos(2 * np.pi * month / 12)
+    feature_df['district_encoded'] = patient_data['district_encoded']
 
     def get_season(m):
         if m in [12, 1, 2]: return 0
@@ -136,8 +162,7 @@ def create_feature_vector(patient_data):
         else: return 3
 
     feature_df['season'] = get_season(month)
-    feature_df['month_sin'] = np.sin(2 * np.pi * feature_df['month'] / 12)
-    feature_df['month_cos'] = np.cos(2 * np.pi * feature_df['month'] / 12)
+    feature_df['year_normalized'] = (year - 2012) / (2024 - 2012 + 1)
 
     # === INTERACTION FEATURES ===
     # Geo-temporal interactions
@@ -170,21 +195,11 @@ def create_feature_vector(patient_data):
     feature_df['sex_respiratory'] = patient_data['SEX'] * feature_df['respiratory_symptoms']
     feature_df['duration_symptom_ratio'] = feature_df['duration_of_illness'] / (feature_df['symptom_count'] + 1)
 
-    # Year features (use current year)
-    year = patient_data.get('year', 2024)
-    feature_df['year'] = year
-    feature_df['year_normalized'] = (year - 2012) / (2024 - 2012 + 1)  # Normalize based on training range
-
-    # Quarter, week, day of year
-    date = datetime(year, month, 1)
-    feature_df['quarter'] = (month - 1) // 3 + 1
-    feature_df['week_of_year'] = date.isocalendar()[1]
-    feature_df['day_of_year'] = date.timetuple().tm_yday
-
     # Final cleanup
     feature_df = feature_df.replace([np.inf, -np.inf], 0).fillna(0)
 
-    return feature_df.iloc[0].values.reshape(1, -1)
+    # Return DataFrame (NOT numpy array) so XGBoost can use feature names
+    return feature_df
 
 def main():
     st.title("Virus Detection and Classification System")
