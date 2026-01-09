@@ -186,13 +186,13 @@ def main():
     patient_data['age'] = st.sidebar.number_input("Age", min_value=0, max_value=120, value=30)
     patient_data['SEX'] = st.sidebar.selectbox("Sex", options=[0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
     patient_data['PATIENTTYPE'] = st.sidebar.selectbox("Patient Type", options=[0, 1], format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
-    patient_data['duration_of_illness'] = st.sidebar.number_input("Duration of Illness (days)", min_value=0, max_value=365, value=3)
-    patient_data['state'] = st.sidebar.number_input("State Code", min_value=0, max_value=35, value=0, help="Encoded state value")
-    patient_data['district'] = st.sidebar.number_input("District Code", min_value=0, max_value=740, value=370, help="Encoded district value (default: median)")
+    patient_data['districtencoded'] = st.sidebar.number_input("Duration of Illness (days)", min_value=0, max_value=365, value=3)
+    patient_data['labstate'] = st.sidebar.number_input("State Code", min_value=0, max_value=35, value=0, help="Encoded state value")
+    patient_data['districtencoded'] = st.sidebar.number_input("District Code", min_value=0, max_value=740, value=370, help="Encoded district value (default: median)")
     patient_data['record_date'] = st.sidebar.date_input("Record Date", value=datetime.now())
     patient_data['month'] = st.sidebar.selectbox("Month of Illness Onset", options=list(range(1, 13)), 
                                                  format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
-    
+
     # Main area for symptoms
     st.header("🩺 Clinical Symptoms")
     st.write("Select all symptoms present in the patient:")
