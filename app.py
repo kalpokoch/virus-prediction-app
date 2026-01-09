@@ -68,6 +68,18 @@ def load_model():
         st.error(f"Error loading model: {e}")
         return None
 
+@st.cache_data
+def load_mappings():
+    """Load state, district, and district-state mapping CSV files"""
+    try:
+        state_map = pd.read_csv('state_encoding_map.csv')
+        district_map = pd.read_csv('district_encoding_map.csv')
+        district_state_map = pd.read_csv('district_state_mapping.csv')
+        return state_map, district_map, district_state_map
+    except Exception as e:
+        st.error(f"Error loading mapping files: {e}")
+        return None, None, None
+
 def create_feature_vector(patient_data):
     """
     Convert user inputs → 80 model features (EXACT training replica)
@@ -179,10 +191,15 @@ def main():
     st.markdown("---")
     st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
 
-    # Load model
+    # Load model and mappings
     model = load_model()
     if model is None:
         st.error("Failed to load model. Please check the model file path.")
+        return
+    
+    state_map, district_map, district_state_map = load_mappings()
+    if state_map is None or district_map is None or district_state_map is None:
+        st.error("Failed to load mapping files. Please check the CSV files.")
         return
 
     # Sidebar for patient demographics
@@ -198,8 +215,22 @@ def main():
                                                         format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
     patient_data['durationofillness'] = st.sidebar.number_input("Duration of Illness (days)", 
                                                                  min_value=0, max_value=365, value=3)
-    patient_data['labstate'] = st.sidebar.number_input("State Code", min_value=0, max_value=35, value=0)
-    patient_data['districtencoded'] = st.sidebar.number_input("District Code", min_value=0, max_value=740, value=370)
+    
+    # State selection with names
+    state_names = state_map['state_name'].tolist()
+    selected_state_name = st.sidebar.selectbox("State", options=state_names, index=0)
+    patient_data['labstate'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
+    
+    # District selection filtered by state
+    filtered_districts = district_state_map[district_state_map['state'] == selected_state_name]
+    district_names = filtered_districts['district_name'].tolist()
+    
+    if len(district_names) > 0:
+        selected_district_name = st.sidebar.selectbox("District", options=district_names, index=0)
+        patient_data['districtencoded'] = int(filtered_districts[filtered_districts['district_name'] == selected_district_name]['district_encoded'].values[0])
+    else:
+        st.sidebar.warning("No districts available for selected state")
+        patient_data['districtencoded'] = 0
 
     # Temporal features
     patient_data['month'] = st.sidebar.selectbox("Month of Illness", options=list(range(1, 13)), 
