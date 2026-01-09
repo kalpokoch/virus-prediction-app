@@ -112,13 +112,13 @@ def create_feature_vector(patient_data):
     feature_df['age'] = feature_df['age'].fillna(30).clip(0, 120)
     feature_df['duration_of_illness'] = feature_df['duration_of_illness'].fillna(0)
 
-    # === AGE FEATURES (MUST BE BEFORE TEMPORAL) ===
+    # === IMMEDIATE: AGE_GROUP (right after base symptoms) ===
     feature_df['age_group'] = pd.cut(feature_df['age'], 
                                    bins=[0, 5, 18, 45, 65, 150], 
                                    labels=[0, 1, 2, 3, 4]).cat.codes
     feature_df['age_group'] = feature_df['age_group'].replace(-1, 2)
 
-    # === SYMPTOM AGGREGATIONS (MUST BE BEFORE TEMPORAL) ===
+    # === IMMEDIATE: SYMPTOM AGGREGATIONS (right after age_group) ===
     respiratory_cols = ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']
     gi_cols = ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']
     neuro_cols = ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']
@@ -136,7 +136,7 @@ def create_feature_vector(patient_data):
     feature_df['systemic_symptoms'] = feature_df[systemic_cols].sum(axis=1)
     feature_df['symptom_diversity'] = (feature_df[symptom_count_cols] > 0).sum(axis=1)
 
-    # === GEO-TEMPORAL FEATURES (AFTER SYMPTOM AGGREGATIONS) ===
+    # === NOW: GEO-TEMPORAL FEATURES (after symptom aggregations) ===
     month = patient_data.get('month', 1)
     year = patient_data.get('year', 2024)
     
@@ -154,6 +154,7 @@ def create_feature_vector(patient_data):
     feature_df['month_cos'] = np.cos(2 * np.pi * month / 12)
     feature_df['district_encoded'] = patient_data['district_encoded']
 
+    # Season and year_normalized MUST come right after district_encoded
     def get_season(m):
         if m in [12, 1, 2]: return 0
         elif m in [3, 4, 5]: return 1
@@ -163,7 +164,7 @@ def create_feature_vector(patient_data):
     feature_df['season'] = get_season(month)
     feature_df['year_normalized'] = (year - 2012) / (2024 - 2012 + 1)
 
-    # === INTERACTION FEATURES ===
+    # === INTERACTION FEATURES (after season and year_normalized) ===
     # Geo-temporal interactions
     feature_df['monsoon_respiratory'] = feature_df['is_monsoon'] * feature_df['respiratory_symptoms']
     feature_df['winter_respiratory'] = feature_df['is_winter'] * feature_df['respiratory_symptoms']
