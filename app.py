@@ -112,20 +112,19 @@ def create_feature_vector(patient_data):
     feature_df['age'] = feature_df['age'].fillna(30).clip(0, 120)
     feature_df['duration_of_illness'] = feature_df['duration_of_illness'].fillna(0)
 
-    # === AGE FEATURES ===
+    # === AGE FEATURES (MUST BE BEFORE TEMPORAL) ===
     feature_df['age_group'] = pd.cut(feature_df['age'], 
                                    bins=[0, 5, 18, 45, 65, 150], 
                                    labels=[0, 1, 2, 3, 4]).cat.codes
     feature_df['age_group'] = feature_df['age_group'].replace(-1, 2)
 
-    # === SYMPTOM GROUPS ===
+    # === SYMPTOM AGGREGATIONS (MUST BE BEFORE TEMPORAL) ===
     respiratory_cols = ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']
     gi_cols = ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']
     neuro_cols = ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']
     skin_cols = ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']
     systemic_cols = ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']
 
-    # Symptom counts
     symptom_count_cols = ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 
                          'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']
 
@@ -137,7 +136,7 @@ def create_feature_vector(patient_data):
     feature_df['systemic_symptoms'] = feature_df[systemic_cols].sum(axis=1)
     feature_df['symptom_diversity'] = (feature_df[symptom_count_cols] > 0).sum(axis=1)
 
-    # === GEO-TEMPORAL FEATURES ===
+    # === GEO-TEMPORAL FEATURES (AFTER SYMPTOM AGGREGATIONS) ===
     month = patient_data.get('month', 1)
     year = patient_data.get('year', 2024)
     
