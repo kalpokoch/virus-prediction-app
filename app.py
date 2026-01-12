@@ -44,6 +44,23 @@ VIRUS_MAPPING = {
     25: 'Varicella zoster virus VZV'
 }
 
+# Other Virus sub-classification mapping (13 classes)
+OTHER_VIRUS_MAPPING = {
+    0: 'HIV',
+    1: 'Haemophilus influenzae',
+    2: 'Herpes simplex virus (HSV)',
+    3: 'Human Bocavirus',
+    4: 'Kyasanur Forest Disease',
+    5: 'Metapneumovirus',
+    6: 'Norovirus',
+    7: 'Other Influenza',
+    8: 'Rhinovirus',
+    9: 'Toxoplasma',
+    10: 'Unknown',
+    11: 'West Nile virus (WNV)',
+    12: 'Zika'
+}
+
 # Symptom groups
 SYMPTOM_GROUPS = {
     "Neurological": ['HEADACHE', 'IRRITABLITY', 'ALTEREDSENSORIUM', 'SOMNOLENCE', 
@@ -59,14 +76,16 @@ SYMPTOM_GROUPS = {
 
 @st.cache_resource
 def load_model():
-    """Load the trained XGBoost model"""
+    """Load the trained XGBoost models"""
     try:
         with open('models/xgb_filtered_model.pkl', 'rb') as f:
-            model = pickle.load(f)
-        return model
+            model1 = pickle.load(f)
+        with open('models/xgb_filtered_M2_model.pkl', 'rb') as f:
+            model2 = pickle.load(f)
+        return model1, model2
     except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
+        st.error(f"Error loading models: {e}")
+        return None, None
 
 @st.cache_data
 def load_mappings():
@@ -191,10 +210,10 @@ def main():
     st.markdown("---")
     st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
 
-    # Load model and mappings
-    model = load_model()
-    if model is None:
-        st.error("Failed to load model. Please check the model file path.")
+    # Load models and mappings
+    model1, model2 = load_model()
+    if model1 is None or model2 is None:
+        st.error("Failed to load models. Please check the model file paths.")
         return
     
     state_map, district_map, district_state_map = load_mappings()
@@ -257,12 +276,28 @@ def main():
                 # Create feature vector
                 X = create_feature_vector(patient_data)
 
-                # Make prediction
-                y_pred = model.predict(X)[0]
-                y_pred_proba = model.predict_proba(X)[0]
+                # Make prediction with Model 1
+                y_pred = model1.predict(X)[0]
+                y_pred_proba = model1.predict_proba(X)[0]
 
                 # Get top 5 predictions
                 top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
+
+                # Check if "Other_Viruses" (class 15) is in top 5
+                other_virus_in_top5 = 15 in top_5_indices
+                second_model_results = None
+                
+                if other_virus_in_top5:
+                    # Run second model for sub-classification
+                    y_pred_m2 = model2.predict(X)[0]
+                    y_pred_proba_m2 = model2.predict_proba(X)[0]
+                    top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
+                    
+                    second_model_results = {
+                        'prediction': y_pred_m2,
+                        'probabilities': y_pred_proba_m2,
+                        'top_5': top_5_indices_m2
+                    }
 
                 # Display results
                 st.success("✅ Prediction Complete!")
@@ -271,29 +306,81 @@ def main():
 
                 with col1:
                     st.subheader("🎯 Most Likely Virus")
-                    st.metric(
-                        label="Predicted Virus",
-                        value=VIRUS_MAPPING[y_pred],
-                        delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
-                    )
+                    
+                    # Check if primary prediction is Other_Viruses
+                    if y_pred == 15 and second_model_results:
+                        sub_virus = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
+                        sub_confidence = second_model_results['probabilities'][second_model_results['prediction']] * 100
+                        st.metric(
+                            label="Predicted Virus",
+                            value=f"Other_Viruses → {sub_virus}",
+                            delta=f"{y_pred_proba[y_pred]*100:.2f}% (M1) | {sub_confidence:.2f}% (M2)"
+                        )
+                    else:
+                        st.metric(
+                            label="Predicted Virus",
+                            value=VIRUS_MAPPING[y_pred],
+                            delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
+                        )
 
                 with col2:
-                    st.subheader("📊 Top 5 Predictions")
+                    st.subheader("📊 Top 5 Predictions (Model 1)")
                     for rank, idx in enumerate(top_5_indices, 1):
                         virus_name = VIRUS_MAPPING[idx]
                         confidence = y_pred_proba[idx] * 100
-                        st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
+                        
+                        # Add indicator if this is Other_Viruses
+                        if idx == 15 and second_model_results:
+                            sub_virus = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
+                            st.write(f"{rank}. **{virus_name}** → *{sub_virus}*: {confidence:.2f}%")
+                        else:
+                            st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
+                
+                # Display second model results if available
+                if second_model_results:
+                    st.markdown("---")
+                    st.subheader("🔬 Other Viruses Sub-Classification (Model 2)")
+                    st.info("Since 'Other_Viruses' appeared in top 5, secondary classification was performed.")
+                    
+                    col3, col4 = st.columns([1, 1])
+                    
+                    with col3:
+                        st.write("**Top Prediction:**")
+                        top_sub = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
+                        top_conf = second_model_results['probabilities'][second_model_results['prediction']] * 100
+                        st.metric(label="Sub-Category", value=top_sub, delta=f"{top_conf:.2f}% confidence")
+                    
+                    with col4:
+                        st.write("**Top 5 Sub-Categories:**")
+                        for rank, idx in enumerate(second_model_results['top_5'], 1):
+                            sub_virus = OTHER_VIRUS_MAPPING[idx]
+                            sub_confidence = second_model_results['probabilities'][idx] * 100
+                            st.write(f"{rank}. **{sub_virus}**: {sub_confidence:.2f}%")
 
                 # Display probability distribution
                 st.markdown("---")
-                st.subheader("📈 Probability Distribution (Top 10)")
-
-                top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
-                prob_df = pd.DataFrame({
-                    'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
-                    'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
-                })
-                st.bar_chart(prob_df.set_index('Virus'))
+                st.subheader("📈 Probability Distribution")
+                
+                tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"]) if second_model_results else st.tabs(["Model 1 (Major Classes)"])
+                
+                with tab1:
+                    st.write("**Top 10 Major Virus Categories**")
+                    top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
+                    prob_df = pd.DataFrame({
+                        'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
+                        'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
+                    })
+                    st.bar_chart(prob_df.set_index('Virus'))
+                
+                if second_model_results:
+                    with tab2:
+                        st.write("**Top 10 Other Virus Sub-Categories**")
+                        top_10_indices_m2 = np.argsort(second_model_results['probabilities'])[-10:][::-1]
+                        prob_df_m2 = pd.DataFrame({
+                            'Virus': [OTHER_VIRUS_MAPPING[i] for i in top_10_indices_m2],
+                            'Probability (%)': [second_model_results['probabilities'][i]*100 for i in top_10_indices_m2]
+                        })
+                        st.bar_chart(prob_df_m2.set_index('Virus'))
 
                 # Feature summary
                 with st.expander("📋 Input Summary"):

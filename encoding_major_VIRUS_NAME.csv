@@ -1,0 +1,27 @@
+Original_Value,Encoded_Value
+Chikungunya Virus,0
+Dengue Virus,1
+Enterovirus,2
+Hepatitis A Virus,3
+Hepatitis B Virus,4
+Hepatitis C Virus,5
+Hepatitis E Virus,6
+Herpes simplex virus,7
+Influenza A H1N1,8
+Influenza A H3N2,9
+Influenza B Victoria,10
+Japanese Encephalitis,11
+Leptospira,12
+Measles Virus,13
+Mumps Virus,14
+Other_Viruses,15
+Parvovirus,16
+Respiratory Adenovirus,17
+Respiratory Syncytial Virus (RSV),18
+Respiratory Syncytial Virus-A (RSV-A),19
+Respiratory Syncytial Virus-B (RSV-B),20
+Rotavirus,21
+Rubella,22
+SARS-Cov-2,23
+Scrub typhus (Orientia tsutsugamushi),24
+Varicella zoster virus (VZV),25
