@@ -74,7 +74,7 @@ SYMPTOM_GROUPS = {
     "Dermatological": ['BULLAE', 'PAPULARRASH', 'PUSTULARRASH', 'MUSCULARRASH', 
                        'MACULOPAPULARRASH', 'ESCHAR'],
     "Hepatic/Other": ['DARKURINE', 'HEPATOMEGALY', 'JAUNDICE'],
-    "Ocular": ['REDEYE', 'DISCHARGEEYES', 'CRUSHINGEYES']
+    "Ocular": ['RED EYE', 'DISCHARGE EYES', 'CRUSHING EYES']
 }
 
 
@@ -234,9 +234,9 @@ def create_feature_vector(patient_data):
         symptoms[symptom_cols.index('ESCHAR')],
         symptoms[symptom_cols.index('DARKURINE')],
         symptoms[symptom_cols.index('HEPATOMEGALY')],
-        symptoms[symptom_cols.index('REDEYE')],
-        symptoms[symptom_cols.index('DISCHARGEEYES')],
-        symptoms[symptom_cols.index('CRUSHINGEYES')],
+        symptoms[symptom_cols.index('RED EYE')],
+        symptoms[symptom_cols.index('DISCHARGE EYES')],
+        symptoms[symptom_cols.index('CRUSHING EYES')],
         symptoms[symptom_cols.index('JAUNDICE')],
         fever,
         symptoms[symptom_cols.index('ABDOMINALPAIN')],
