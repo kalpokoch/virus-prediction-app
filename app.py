@@ -412,8 +412,12 @@ def main():
                 st.markdown("---")
                 st.subheader("📈 Probability Distribution")
                 
-                tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"]) if second_model_results else st.tabs(["Model 1 (Major Classes)"])
-                
+                if second_model_results:
+                    tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"])
+                else:
+                    tabs = st.tabs(["Model 1 (Major Classes)"])
+                    tab1 = tabs[0]
+
                 with tab1:
                     st.write("**Top 10 Major Virus Categories**")
                     top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
