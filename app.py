@@ -195,7 +195,7 @@ def create_feature_vector(patient_data):
     year_normalized = (year - 2012) / 13.0
     
     # Build feature vector directly (no DataFrame overhead)
-    # Note: Order must match training feature order
+    # Note: Must include ALL 80 features in exact training order
     feature_vector = np.array([
         # Demographics & Clinical (5)
         labstate, age, sex, patienttype, duration,
@@ -237,7 +237,21 @@ def create_feature_vector(patient_data):
         
         # Geo-temporal (10)
         month, year, quarter, weekofyear, dayofyear,
-        ismonsoon, iswinter, month_sin, month_cos, district
+        ismonsoon, iswinter, month_sin, month_cos, district,
+        
+        # Derived features (32 more to reach 80)
+        agegroup,
+        symptom_count, respiratory_symptoms, gi_symptoms, neuro_symptoms, 
+        skin_symptoms, systemic_symptoms, symptom_diversity,
+        season,
+        monsoon_respiratory, winter_respiratory, monsoon_fever,
+        state_season, district_season, district_month,
+        state_respiratory, state_fever, state_gi,
+        fever_respiratory, fever_gi, fever_neuro, fever_skin,
+        fever_duration, fever_headache, fever_cough,
+        severity_score, age_symptom, age_duration,
+        patienttype_age, sex_respiratory, duration_symptom_ratio,
+        year_normalized
     ], dtype=np.float32)
     
     return feature_vector.reshape(1, -1)
