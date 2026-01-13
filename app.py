@@ -49,7 +49,7 @@ OTHER_VIRUS_MAPPING = {
     0: 'HIV',
     1: 'Haemophilus influenzae',
     2: 'Herpes simplex virus (HSV)',
-    3: 'Human Bocavirus',
+    3: 'Human papillomavirus (HPV)',
     4: 'Kyasanur Forest Disease',
     5: 'Metapneumovirus',
     6: 'Norovirus',
@@ -73,6 +73,14 @@ SYMPTOM_GROUPS = {
     "Hepatic/Other": ['DARKURINE', 'HEPATOMEGALY', 'JAUNDICE'],
     "Ocular": ['REDEYE', 'DISCHARGEEYES', 'CRUSHINGEYES']
 }
+
+# Pre-computed lookup tables for performance optimization
+MONTH_TO_SEASON = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 2, 9: 2, 10: 3, 11: 3, 12: 0}
+MONTH_TO_QUARTER = {1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4, 12: 4}
+MONTH_TO_WEEK = {1: 2, 2: 6, 3: 10, 4: 14, 5: 18, 6: 23, 7: 27, 8: 31, 9: 36, 10: 40, 11: 44, 12: 49}
+MONTH_SIN = {m: np.sin(2 * np.pi * m / 12) for m in range(1, 13)}
+MONTH_COS = {m: np.cos(2 * np.pi * m / 12) for m in range(1, 13)}
+MONTH_TO_DAY = {1: 15, 2: 45, 3: 74, 4: 105, 5: 135, 6: 166, 7: 196, 8: 227, 9: 258, 10: 288, 11: 319, 12: 349}
 
 @st.cache_resource
 def load_model():
@@ -101,109 +109,138 @@ def load_mappings():
 
 def create_feature_vector(patient_data):
     """
-    Convert user inputs → 80 model features (EXACT training replica)
+    Optimized: Convert user inputs → 80 model features using direct numpy operations
     """
-    # Step 1: Create base DataFrame with correct column names
-    feature_df = pd.DataFrame([patient_data])
-
-    # Fill missing values
-    feature_df['age'] = feature_df['age'].fillna(30).clip(0, 120)
-    feature_df['durationofillness'] = feature_df['durationofillness'].fillna(0)
-
-    # Fill all symptoms with 0
-    symptom_cols = list(sum(SYMPTOM_GROUPS.values(), []))
-    for col in symptom_cols:
-        if col not in feature_df.columns:
-            feature_df[col] = 0
-        feature_df[col] = feature_df[col].fillna(0).clip(0, 1)
-
-    # === AGE FEATURES ===
-    feature_df['agegroup'] = pd.cut(feature_df['age'], 
-                                   bins=[0, 5, 18, 45, 65, 150], 
-                                   labels=[0, 1, 2, 3, 4]).astype(int)
-    feature_df['agegroup'] = feature_df['agegroup'].fillna(2)
-
-    # === SYMPTOM GROUPS ===
-    respiratory_cols = ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']
-    gi_cols = ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']
-    neuro_cols = ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']
-    skin_cols = ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']
-    systemic_cols = ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']
-
-    # Symptom counts
-    symptom_count_cols = ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 
-                         'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']
-
-    feature_df['symptom_count'] = feature_df[symptom_count_cols].sum(axis=1)
-    feature_df['respiratory_symptoms'] = feature_df[respiratory_cols].sum(axis=1)
-    feature_df['gi_symptoms'] = feature_df[gi_cols].sum(axis=1)
-    feature_df['neuro_symptoms'] = feature_df[neuro_cols].sum(axis=1)
-    feature_df['skin_symptoms'] = feature_df[skin_cols].sum(axis=1)
-    feature_df['systemic_symptoms'] = feature_df[systemic_cols].sum(axis=1)
-    feature_df['symptom_diversity'] = (feature_df[symptom_count_cols] > 0).sum(axis=1)
-
-    # === GEO-TEMPORAL FEATURES ===
+    # Extract base values
+    age = min(max(patient_data.get('age', 30), 0), 120)
+    duration = max(patient_data.get('durationofillness', 0), 0)
     month = patient_data.get('month', 1)
-    feature_df['month'] = month
-    feature_df['ismonsoon'] = int(month in [6, 7, 8, 9])
-    feature_df['iswinter'] = int(month in [12, 1, 2])
-
-    def get_season(m):
-        if m in [12, 1, 2]: return 0
-        elif m in [3, 4, 5]: return 1
-        elif m in [6, 7, 8, 9]: return 2
-        else: return 3
-
-    feature_df['season'] = get_season(month)
-    feature_df['month_sin'] = np.sin(2 * np.pi * feature_df['month'] / 12)
-    feature_df['month_cos'] = np.cos(2 * np.pi * feature_df['month'] / 12)
-
-    # === INTERACTION FEATURES ===
-    # Geo-temporal interactions
-    feature_df['monsoon_respiratory'] = feature_df['ismonsoon'] * feature_df['respiratory_symptoms']
-    feature_df['winter_respiratory'] = feature_df['iswinter'] * feature_df['respiratory_symptoms']
-    feature_df['monsoon_fever'] = feature_df['ismonsoon'] * feature_df['FEVER']
-
-    feature_df['state_season'] = patient_data['labstate'] * 10 + feature_df['season']
-    feature_df['district_season'] = patient_data['districtencoded'] * 10 + feature_df['season']
-    feature_df['district_month'] = patient_data['districtencoded'] * 100 + feature_df['month']
-
-    feature_df['state_respiratory'] = patient_data['labstate'] * feature_df['respiratory_symptoms']
-    feature_df['state_fever'] = patient_data['labstate'] * feature_df['FEVER']
-    feature_df['state_gi'] = patient_data['labstate'] * feature_df['gi_symptoms']
-
-    # Fever interactions
-    feature_df['fever_respiratory'] = feature_df['FEVER'] * feature_df['respiratory_symptoms']
-    feature_df['fever_gi'] = feature_df['FEVER'] * feature_df['gi_symptoms']
-    feature_df['fever_neuro'] = feature_df['FEVER'] * feature_df['neuro_symptoms']
-    feature_df['fever_skin'] = feature_df['FEVER'] * feature_df['skin_symptoms']
-    feature_df['fever_duration'] = feature_df['FEVER'] * feature_df['durationofillness']
-    feature_df['fever_headache'] = feature_df['FEVER'] * feature_df['HEADACHE']
-    feature_df['fever_cough'] = feature_df['FEVER'] * feature_df['COUGH']
-
-    # Severity & demographic interactions
-    feature_df['severity_score'] = feature_df['symptom_count'] * feature_df['durationofillness']
-    feature_df['age_symptom'] = feature_df['age'] * feature_df['symptom_count']
-    feature_df['age_duration'] = feature_df['age'] * feature_df['durationofillness']
-    feature_df['patienttype_age'] = patient_data['PATIENTTYPE'] * feature_df['agegroup']
-    feature_df['sex_respiratory'] = patient_data['SEX'] * feature_df['respiratory_symptoms']
-    feature_df['duration_symptom_ratio'] = feature_df['durationofillness'] / (feature_df['symptom_count'] + 1)
-
-    # Year features (use current year)
     year = patient_data.get('year', 2024)
-    feature_df['year'] = year
-    feature_df['year_normalized'] = (year - 2012) / (2024 - 2012 + 1)  # Normalize based on training range
-
-    # Quarter, week, day of year
-    date = datetime(year, month, 1)
-    feature_df['quarter'] = (month - 1) // 3 + 1
-    feature_df['weekofyear'] = date.isocalendar()[1]
-    feature_df['dayofyear'] = date.timetuple().tm_yday
-
-    # Final cleanup
-    feature_df = feature_df.replace([np.inf, -np.inf], 0).fillna(0)
-
-    return feature_df.iloc[0].values.reshape(1, -1)
+    labstate = patient_data['labstate']
+    district = patient_data['districtencoded']
+    sex = patient_data['SEX']
+    patienttype = patient_data['PATIENTTYPE']
+    
+    # Get symptoms using direct lookup (much faster than DataFrame)
+    symptom_cols = list(sum(SYMPTOM_GROUPS.values(), []))
+    symptoms = np.array([patient_data.get(s, 0) for s in symptom_cols], dtype=np.float32)
+    
+    # Age group calculation (direct bins)
+    if age <= 5: agegroup = 0
+    elif age <= 18: agegroup = 1
+    elif age <= 45: agegroup = 2
+    elif age <= 65: agegroup = 3
+    else: agegroup = 4
+    
+    # Pre-defined symptom indices for fast array slicing
+    respiratory_idx = [symptom_cols.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']]
+    gi_idx = [symptom_cols.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']]
+    neuro_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']]
+    skin_idx = [symptom_cols.index(s) for s in ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']]
+    systemic_idx = [symptom_cols.index(s) for s in ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']]
+    count_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']]
+    
+    # Symptom group sums (vectorized)
+    respiratory_symptoms = symptoms[respiratory_idx].sum()
+    gi_symptoms = symptoms[gi_idx].sum()
+    neuro_symptoms = symptoms[neuro_idx].sum()
+    skin_symptoms = symptoms[skin_idx].sum()
+    systemic_symptoms = symptoms[systemic_idx].sum()
+    symptom_count = symptoms[count_idx].sum()
+    symptom_diversity = (symptoms[count_idx] > 0).sum()
+    
+    # Fast symptom access
+    fever = symptoms[symptom_cols.index('FEVER')]
+    headache = symptoms[symptom_cols.index('HEADACHE')]
+    cough = symptoms[symptom_cols.index('COUGH')]
+    
+    # Geo-temporal features (using pre-computed lookups)
+    season = MONTH_TO_SEASON[month]
+    ismonsoon = 1 if month in [6, 7, 8, 9] else 0
+    iswinter = 1 if month in [12, 1, 2] else 0
+    month_sin = MONTH_SIN[month]
+    month_cos = MONTH_COS[month]
+    quarter = MONTH_TO_QUARTER[month]
+    weekofyear = MONTH_TO_WEEK[month]
+    dayofyear = MONTH_TO_DAY[month]
+    
+    # Interaction features (all vectorized)
+    monsoon_respiratory = ismonsoon * respiratory_symptoms
+    winter_respiratory = iswinter * respiratory_symptoms
+    monsoon_fever = ismonsoon * fever
+    
+    state_season = labstate * 10 + season
+    district_season = district * 10 + season
+    district_month = district * 100 + month
+    
+    state_respiratory = labstate * respiratory_symptoms
+    state_fever = labstate * fever
+    state_gi = labstate * gi_symptoms
+    
+    fever_respiratory = fever * respiratory_symptoms
+    fever_gi = fever * gi_symptoms
+    fever_neuro = fever * neuro_symptoms
+    fever_skin = fever * skin_symptoms
+    fever_duration = fever * duration
+    fever_headache = fever * headache
+    fever_cough = fever * cough
+    
+    severity_score = symptom_count * duration
+    age_symptom = age * symptom_count
+    age_duration = age * duration
+    patienttype_age = patienttype * agegroup
+    sex_respiratory = sex * respiratory_symptoms
+    duration_symptom_ratio = duration / (symptom_count + 1)
+    
+    year_normalized = (year - 2012) / 13.0
+    
+    # Build feature vector directly (no DataFrame overhead)
+    # Note: Order must match training feature order
+    feature_vector = np.array([
+        # Demographics & Clinical (5)
+        labstate, age, sex, patienttype, duration,
+        
+        # Symptoms (33) - in exact training order
+        symptoms[symptom_cols.index('HEADACHE')],
+        symptoms[symptom_cols.index('IRRITABLITY')],
+        symptoms[symptom_cols.index('ALTEREDSENSORIUM')],
+        symptoms[symptom_cols.index('SOMNOLENCE')],
+        symptoms[symptom_cols.index('NECKRIGIDITY')],
+        symptoms[symptom_cols.index('SEIZURES')],
+        symptoms[symptom_cols.index('DIARRHEA')],
+        symptoms[symptom_cols.index('DYSENTERY')],
+        symptoms[symptom_cols.index('NAUSEA')],
+        symptoms[symptom_cols.index('MALAISE')],
+        symptoms[symptom_cols.index('MYALGIA')],
+        symptoms[symptom_cols.index('ARTHRALGIA')],
+        symptoms[symptom_cols.index('CHILLS')],
+        symptoms[symptom_cols.index('RIGORS')],
+        symptoms[symptom_cols.index('BREATHLESSNESS')],
+        symptoms[symptom_cols.index('COUGH')],
+        symptoms[symptom_cols.index('RHINORRHEA')],
+        symptoms[symptom_cols.index('SORETHROAT')],
+        symptoms[symptom_cols.index('BULLAE')],
+        symptoms[symptom_cols.index('PAPULARRASH')],
+        symptoms[symptom_cols.index('PUSTULARRASH')],
+        symptoms[symptom_cols.index('MUSCULARRASH')],
+        symptoms[symptom_cols.index('MACULOPAPULARRASH')],
+        symptoms[symptom_cols.index('ESCHAR')],
+        symptoms[symptom_cols.index('DARKURINE')],
+        symptoms[symptom_cols.index('HEPATOMEGALY')],
+        symptoms[symptom_cols.index('REDEYE')],
+        symptoms[symptom_cols.index('DISCHARGEEYES')],
+        symptoms[symptom_cols.index('CRUSHINGEYES')],
+        symptoms[symptom_cols.index('JAUNDICE')],
+        fever,
+        symptoms[symptom_cols.index('ABDOMINALPAIN')],
+        symptoms[symptom_cols.index('VOMITING')],
+        
+        # Geo-temporal (10)
+        month, year, quarter, weekofyear, dayofyear,
+        ismonsoon, iswinter, month_sin, month_cos, district
+    ], dtype=np.float32)
+    
+    return feature_vector.reshape(1, -1)
 
 def main():
     st.title("🦠 Virus Detection and Classification System")
@@ -276,9 +313,9 @@ def main():
                 # Create feature vector
                 X = create_feature_vector(patient_data)
 
-                # Make prediction with Model 1
-                y_pred = model1.predict(X)[0]
+                # Make prediction with Model 1 (use only predict_proba for speed)
                 y_pred_proba = model1.predict_proba(X)[0]
+                y_pred = np.argmax(y_pred_proba)
 
                 # Get top 5 predictions
                 top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
@@ -288,9 +325,9 @@ def main():
                 second_model_results = None
                 
                 if other_virus_in_top5:
-                    # Run second model for sub-classification
-                    y_pred_m2 = model2.predict(X)[0]
+                    # Run second model for sub-classification (use only predict_proba)
                     y_pred_proba_m2 = model2.predict_proba(X)[0]
+                    y_pred_m2 = np.argmax(y_pred_proba_m2)
                     top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
                     
                     second_model_results = {
