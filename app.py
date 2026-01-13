@@ -1,10 +1,11 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
 from datetime import datetime
 import xgboost as xgb
+from numba import jit
+
 
 # Page configuration
 st.set_page_config(
@@ -13,6 +14,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # Virus mapping (26 classes after filtering)
 VIRUS_MAPPING = {
@@ -44,6 +46,7 @@ VIRUS_MAPPING = {
     25: 'Varicella zoster virus VZV'
 }
 
+
 # Other Virus sub-classification mapping (13 classes)
 OTHER_VIRUS_MAPPING = {
     0: 'HIV',
@@ -61,6 +64,7 @@ OTHER_VIRUS_MAPPING = {
     12: 'Zika'
 }
 
+
 # Symptom groups
 SYMPTOM_GROUPS = {
     "Neurological": ['HEADACHE', 'IRRITABLITY', 'ALTEREDSENSORIUM', 'SOMNOLENCE', 
@@ -74,6 +78,7 @@ SYMPTOM_GROUPS = {
     "Ocular": ['REDEYE', 'DISCHARGEEYES', 'CRUSHINGEYES']
 }
 
+
 # Pre-computed lookup tables for performance optimization
 MONTH_TO_SEASON = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 2, 9: 2, 10: 3, 11: 3, 12: 0}
 MONTH_TO_QUARTER = {1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4, 12: 4}
@@ -82,18 +87,51 @@ MONTH_SIN = {m: np.sin(2 * np.pi * m / 12) for m in range(1, 13)}
 MONTH_COS = {m: np.cos(2 * np.pi * m / 12) for m in range(1, 13)}
 MONTH_TO_DAY = {1: 15, 2: 45, 3: 74, 4: 105, 5: 135, 6: 166, 7: 196, 8: 227, 9: 258, 10: 288, 11: 319, 12: 349}
 
+# Pre-computed age groups for vectorized computation
+AGE_GROUPS = np.array([0, 5, 18, 45, 65, 120])
+
+# Pre-compute symptom column list (shared across all feature vector creations)
+SYMPTOM_COLS = list(sum(SYMPTOM_GROUPS.values(), []))
+
+# Pre-computed symptom indices for fast array slicing
+RESPIRATORY_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']])
+GI_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']])
+NEURO_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']])
+SKIN_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']])
+SYSTEMIC_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']])
+COUNT_IDX = np.array([SYMPTOM_COLS.index(s) for s in ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']])
+
+# Individual symptom indices
+FEVER_IDX = SYMPTOM_COLS.index('FEVER')
+HEADACHE_IDX = SYMPTOM_COLS.index('HEADACHE')
+COUGH_IDX = SYMPTOM_COLS.index('COUGH')
+
+
+# OPTIMIZATION: Lazy loading - only load primary model on startup
 @st.cache_resource
-def load_model():
-    """Load the trained XGBoost models"""
+def load_primary_model():
+    """Load the primary XGBoost model (26 virus classes)"""
     try:
         with open('models/xgb_filtered_model.pkl', 'rb') as f:
             model1 = pickle.load(f)
+        return model1
+    except Exception as e:
+        st.error(f"Error loading primary model: {e}")
+        return None
+
+
+# OPTIMIZATION: Lazy loading - only load secondary model when needed
+@st.cache_resource
+def load_secondary_model():
+    """Load the secondary XGBoost model (13 other virus sub-classes)"""
+    try:
         with open('models/xgb_filtered_M2_model.pkl', 'rb') as f:
             model2 = pickle.load(f)
-        return model1, model2
+        return model2
     except Exception as e:
-        st.error(f"Error loading models: {e}")
-        return None, None
+        st.error(f"Error loading secondary model: {e}")
+        return None
+
 
 @st.cache_data
 def load_mappings():
@@ -107,9 +145,59 @@ def load_mappings():
         st.error(f"Error loading mapping files: {e}")
         return None, None, None
 
+
+# OPTIMIZATION: Numba JIT compilation for interaction feature calculations
+@jit(nopython=True)
+def compute_interaction_features(symptoms, fever, respiratory_sum, gi_sum, neuro_sum, 
+                                 skin_sum, symptom_count, headache, cough,
+                                 age, duration, labstate, district, month, 
+                                 season, ismonsoon, iswinter, sex, patienttype, agegroup):
+    """
+    Compute interaction features using Numba for speed
+    Returns array of 24 interaction features
+    """
+    interactions = np.empty(24, dtype=np.float32)
+    
+    # Geo-temporal interactions
+    interactions[0] = ismonsoon * respiratory_sum  # monsoon_respiratory
+    interactions[1] = iswinter * respiratory_sum   # winter_respiratory
+    interactions[2] = ismonsoon * fever            # monsoon_fever
+    interactions[3] = labstate * 10 + season       # state_season
+    interactions[4] = district * 10 + season       # district_season
+    interactions[5] = district * 100 + month       # district_month
+    
+    # State-symptom interactions
+    interactions[6] = labstate * respiratory_sum   # state_respiratory
+    interactions[7] = labstate * fever             # state_fever
+    interactions[8] = labstate * gi_sum            # state_gi
+    
+    # Fever-symptom interactions
+    interactions[9] = fever * respiratory_sum      # fever_respiratory
+    interactions[10] = fever * gi_sum              # fever_gi
+    interactions[11] = fever * neuro_sum           # fever_neuro
+    interactions[12] = fever * skin_sum            # fever_skin
+    interactions[13] = fever * duration            # fever_duration
+    interactions[14] = fever * headache            # fever_headache
+    interactions[15] = fever * cough               # fever_cough
+    
+    # Severity and demographic interactions
+    interactions[16] = symptom_count * duration    # severity_score
+    interactions[17] = age * symptom_count         # age_symptom
+    interactions[18] = age * duration              # age_duration
+    interactions[19] = patienttype * agegroup      # patienttype_age
+    interactions[20] = sex * respiratory_sum       # sex_respiratory
+    interactions[21] = duration / (symptom_count + 1)  # duration_symptom_ratio
+    
+    # Placeholder for future features
+    interactions[22] = 0.0
+    interactions[23] = 0.0
+    
+    return interactions
+
+
 def create_feature_vector(patient_data):
     """
-    Optimized: Convert user inputs → 80 model features using direct numpy operations
+    OPTIMIZED: Convert user inputs → 80 model features using vectorized operations
     """
     # Extract base values
     age = min(max(patient_data.get('age', 30), 0), 120)
@@ -121,119 +209,86 @@ def create_feature_vector(patient_data):
     sex = patient_data['SEX']
     patienttype = patient_data['PATIENTTYPE']
     
-    # Get symptoms using direct lookup (much faster than DataFrame)
-    symptom_cols = list(sum(SYMPTOM_GROUPS.values(), []))
-    symptoms = np.array([patient_data.get(s, 0) for s in symptom_cols], dtype=np.float32)
+    # Get symptoms using direct lookup (vectorized)
+    symptoms = np.array([patient_data.get(s, 0) for s in SYMPTOM_COLS], dtype=np.float32)
     
-    # Age group calculation (direct bins)
-    if age <= 5: agegroup = 0
-    elif age <= 18: agegroup = 1
-    elif age <= 45: agegroup = 2
-    elif age <= 65: agegroup = 3
-    else: agegroup = 4
+    # OPTIMIZATION: Vectorized age group calculation
+    agegroup = np.digitize(age, AGE_GROUPS) - 1
+    agegroup = min(max(agegroup, 0), 4)  # Clamp to [0, 4]
     
-    # Pre-defined symptom indices for fast array slicing
-    respiratory_idx = [symptom_cols.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']]
-    gi_idx = [symptom_cols.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']]
-    neuro_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']]
-    skin_idx = [symptom_cols.index(s) for s in ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']]
-    systemic_idx = [symptom_cols.index(s) for s in ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']]
-    count_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']]
-    
-    # Symptom group sums (vectorized)
-    respiratory_symptoms = symptoms[respiratory_idx].sum()
-    gi_symptoms = symptoms[gi_idx].sum()
-    neuro_symptoms = symptoms[neuro_idx].sum()
-    skin_symptoms = symptoms[skin_idx].sum()
-    systemic_symptoms = symptoms[systemic_idx].sum()
-    symptom_count = symptoms[count_idx].sum()
-    symptom_diversity = (symptoms[count_idx] > 0).sum()
+    # OPTIMIZATION: Pre-indexed symptom group sums (vectorized)
+    respiratory_symptoms = symptoms[RESPIRATORY_IDX].sum()
+    gi_symptoms = symptoms[GI_IDX].sum()
+    neuro_symptoms = symptoms[NEURO_IDX].sum()
+    skin_symptoms = symptoms[SKIN_IDX].sum()
+    systemic_symptoms = symptoms[SYSTEMIC_IDX].sum()
+    symptom_count = symptoms[COUNT_IDX].sum()
+    symptom_diversity = (symptoms[COUNT_IDX] > 0).sum()
     
     # Fast symptom access
-    fever = symptoms[symptom_cols.index('FEVER')]
-    headache = symptoms[symptom_cols.index('HEADACHE')]
-    cough = symptoms[symptom_cols.index('COUGH')]
+    fever = symptoms[FEVER_IDX]
+    headache = symptoms[HEADACHE_IDX]
+    cough = symptoms[COUGH_IDX]
     
     # Geo-temporal features (using pre-computed lookups)
     season = MONTH_TO_SEASON[month]
-    ismonsoon = 1 if month in [6, 7, 8, 9] else 0
-    iswinter = 1 if month in [12, 1, 2] else 0
+    ismonsoon = 1.0 if month in [6, 7, 8, 9] else 0.0
+    iswinter = 1.0 if month in [12, 1, 2] else 0.0
     month_sin = MONTH_SIN[month]
     month_cos = MONTH_COS[month]
     quarter = MONTH_TO_QUARTER[month]
     weekofyear = MONTH_TO_WEEK[month]
     dayofyear = MONTH_TO_DAY[month]
     
-    # Interaction features (all vectorized)
-    monsoon_respiratory = ismonsoon * respiratory_symptoms
-    winter_respiratory = iswinter * respiratory_symptoms
-    monsoon_fever = ismonsoon * fever
-    
-    state_season = labstate * 10 + season
-    district_season = district * 10 + season
-    district_month = district * 100 + month
-    
-    state_respiratory = labstate * respiratory_symptoms
-    state_fever = labstate * fever
-    state_gi = labstate * gi_symptoms
-    
-    fever_respiratory = fever * respiratory_symptoms
-    fever_gi = fever * gi_symptoms
-    fever_neuro = fever * neuro_symptoms
-    fever_skin = fever * skin_symptoms
-    fever_duration = fever * duration
-    fever_headache = fever * headache
-    fever_cough = fever * cough
-    
-    severity_score = symptom_count * duration
-    age_symptom = age * symptom_count
-    age_duration = age * duration
-    patienttype_age = patienttype * agegroup
-    sex_respiratory = sex * respiratory_symptoms
-    duration_symptom_ratio = duration / (symptom_count + 1)
+    # OPTIMIZATION: Compute interaction features using Numba JIT
+    interactions = compute_interaction_features(
+        symptoms, fever, respiratory_symptoms, gi_symptoms, neuro_symptoms,
+        skin_symptoms, symptom_count, headache, cough,
+        age, duration, labstate, district, month,
+        season, ismonsoon, iswinter, sex, patienttype, agegroup
+    )
     
     year_normalized = (year - 2012) / 13.0
     
     # Build feature vector directly (no DataFrame overhead)
-    # Note: Must include ALL 80 features in exact training order
     feature_vector = np.array([
         # Demographics & Clinical (5)
         labstate, age, sex, patienttype, duration,
         
         # Symptoms (33) - in exact training order
-        symptoms[symptom_cols.index('HEADACHE')],
-        symptoms[symptom_cols.index('IRRITABLITY')],
-        symptoms[symptom_cols.index('ALTEREDSENSORIUM')],
-        symptoms[symptom_cols.index('SOMNOLENCE')],
-        symptoms[symptom_cols.index('NECKRIGIDITY')],
-        symptoms[symptom_cols.index('SEIZURES')],
-        symptoms[symptom_cols.index('DIARRHEA')],
-        symptoms[symptom_cols.index('DYSENTERY')],
-        symptoms[symptom_cols.index('NAUSEA')],
-        symptoms[symptom_cols.index('MALAISE')],
-        symptoms[symptom_cols.index('MYALGIA')],
-        symptoms[symptom_cols.index('ARTHRALGIA')],
-        symptoms[symptom_cols.index('CHILLS')],
-        symptoms[symptom_cols.index('RIGORS')],
-        symptoms[symptom_cols.index('BREATHLESSNESS')],
-        symptoms[symptom_cols.index('COUGH')],
-        symptoms[symptom_cols.index('RHINORRHEA')],
-        symptoms[symptom_cols.index('SORETHROAT')],
-        symptoms[symptom_cols.index('BULLAE')],
-        symptoms[symptom_cols.index('PAPULARRASH')],
-        symptoms[symptom_cols.index('PUSTULARRASH')],
-        symptoms[symptom_cols.index('MUSCULARRASH')],
-        symptoms[symptom_cols.index('MACULOPAPULARRASH')],
-        symptoms[symptom_cols.index('ESCHAR')],
-        symptoms[symptom_cols.index('DARKURINE')],
-        symptoms[symptom_cols.index('HEPATOMEGALY')],
-        symptoms[symptom_cols.index('REDEYE')],
-        symptoms[symptom_cols.index('DISCHARGEEYES')],
-        symptoms[symptom_cols.index('CRUSHINGEYES')],
-        symptoms[symptom_cols.index('JAUNDICE')],
+        symptoms[SYMPTOM_COLS.index('HEADACHE')],
+        symptoms[SYMPTOM_COLS.index('IRRITABLITY')],
+        symptoms[SYMPTOM_COLS.index('ALTEREDSENSORIUM')],
+        symptoms[SYMPTOM_COLS.index('SOMNOLENCE')],
+        symptoms[SYMPTOM_COLS.index('NECKRIGIDITY')],
+        symptoms[SYMPTOM_COLS.index('SEIZURES')],
+        symptoms[SYMPTOM_COLS.index('DIARRHEA')],
+        symptoms[SYMPTOM_COLS.index('DYSENTERY')],
+        symptoms[SYMPTOM_COLS.index('NAUSEA')],
+        symptoms[SYMPTOM_COLS.index('MALAISE')],
+        symptoms[SYMPTOM_COLS.index('MYALGIA')],
+        symptoms[SYMPTOM_COLS.index('ARTHRALGIA')],
+        symptoms[SYMPTOM_COLS.index('CHILLS')],
+        symptoms[SYMPTOM_COLS.index('RIGORS')],
+        symptoms[SYMPTOM_COLS.index('BREATHLESSNESS')],
+        symptoms[SYMPTOM_COLS.index('COUGH')],
+        symptoms[SYMPTOM_COLS.index('RHINORRHEA')],
+        symptoms[SYMPTOM_COLS.index('SORETHROAT')],
+        symptoms[SYMPTOM_COLS.index('BULLAE')],
+        symptoms[SYMPTOM_COLS.index('PAPULARRASH')],
+        symptoms[SYMPTOM_COLS.index('PUSTULARRASH')],
+        symptoms[SYMPTOM_COLS.index('MUSCULARRASH')],
+        symptoms[SYMPTOM_COLS.index('MACULOPAPULARRASH')],
+        symptoms[SYMPTOM_COLS.index('ESCHAR')],
+        symptoms[SYMPTOM_COLS.index('DARKURINE')],
+        symptoms[SYMPTOM_COLS.index('HEPATOMEGALY')],
+        symptoms[SYMPTOM_COLS.index('REDEYE')],
+        symptoms[SYMPTOM_COLS.index('DISCHARGEEYES')],
+        symptoms[SYMPTOM_COLS.index('CRUSHINGEYES')],
+        symptoms[SYMPTOM_COLS.index('JAUNDICE')],
         fever,
-        symptoms[symptom_cols.index('ABDOMINALPAIN')],
-        symptoms[symptom_cols.index('VOMITING')],
+        symptoms[SYMPTOM_COLS.index('ABDOMINALPAIN')],
+        symptoms[SYMPTOM_COLS.index('VOMITING')],
         
         # Geo-temporal (10)
         month, year, quarter, weekofyear, dayofyear,
@@ -244,33 +299,85 @@ def create_feature_vector(patient_data):
         symptom_count, respiratory_symptoms, gi_symptoms, neuro_symptoms, 
         skin_symptoms, systemic_symptoms, symptom_diversity,
         season,
-        monsoon_respiratory, winter_respiratory, monsoon_fever,
-        state_season, district_season, district_month,
-        state_respiratory, state_fever, state_gi,
-        fever_respiratory, fever_gi, fever_neuro, fever_skin,
-        fever_duration, fever_headache, fever_cough,
-        severity_score, age_symptom, age_duration,
-        patienttype_age, sex_respiratory, duration_symptom_ratio,
+        interactions[0],   # monsoon_respiratory
+        interactions[1],   # winter_respiratory
+        interactions[2],   # monsoon_fever
+        interactions[3],   # state_season
+        interactions[4],   # district_season
+        interactions[5],   # district_month
+        interactions[6],   # state_respiratory
+        interactions[7],   # state_fever
+        interactions[8],   # state_gi
+        interactions[9],   # fever_respiratory
+        interactions[10],  # fever_gi
+        interactions[11],  # fever_neuro
+        interactions[12],  # fever_skin
+        interactions[13],  # fever_duration
+        interactions[14],  # fever_headache
+        interactions[15],  # fever_cough
+        interactions[16],  # severity_score
+        interactions[17],  # age_symptom
+        interactions[18],  # age_duration
+        interactions[19],  # patienttype_age
+        interactions[20],  # sex_respiratory
+        interactions[21],  # duration_symptom_ratio
         year_normalized
     ], dtype=np.float32)
     
     return feature_vector.reshape(1, -1)
+
+
+def predict_with_model(model, X, use_dmatrix=True):
+    """
+    OPTIMIZATION: Unified prediction function using DMatrix for speed
+    """
+    if use_dmatrix:
+        # Convert to DMatrix for faster inference
+        dmatrix = xgb.DMatrix(X)
+        
+        # Check if model is Booster or Classifier
+        if hasattr(model, 'get_booster'):
+            # XGBClassifier - get booster and predict
+            booster = model.get_booster()
+            y_pred_proba = booster.predict(dmatrix)
+        else:
+            # Direct Booster object
+            y_pred_proba = model.predict(dmatrix)
+    else:
+        # Fallback to standard predict_proba
+        y_pred_proba = model.predict_proba(X)[0]
+        return y_pred_proba
+    
+    # Handle output shape
+    if len(y_pred_proba.shape) == 1:
+        return y_pred_proba
+    else:
+        return y_pred_proba[0]
+
 
 def main():
     st.title("🦠 Virus Detection and Classification System")
     st.markdown("---")
     st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
 
-    # Load models and mappings
-    model1, model2 = load_model()
-    if model1 is None or model2 is None:
-        st.error("Failed to load models. Please check the model file paths.")
+    # OPTIMIZATION: Load only primary model on startup
+    model1 = load_primary_model()
+    if model1 is None:
+        st.error("Failed to load primary model. Please check the model file path.")
         return
     
     state_map, district_map, district_state_map = load_mappings()
     if state_map is None or district_map is None or district_state_map is None:
         st.error("Failed to load mapping files. Please check the CSV files.")
         return
+
+    # OPTIMIZATION: Initialize session state for caching
+    if 'last_patient_data' not in st.session_state:
+        st.session_state.last_patient_data = None
+    if 'last_features' not in st.session_state:
+        st.session_state.last_features = None
+    if 'last_prediction' not in st.session_state:
+        st.session_state.last_prediction = None
 
     # Sidebar for patient demographics
     st.sidebar.header("📋 Patient Information")
@@ -324,31 +431,50 @@ def main():
     if st.button("🔍 Predict Virus", type="primary", use_container_width=True):
         with st.spinner("Analyzing patient data..."):
             try:
-                # Create feature vector
-                X = create_feature_vector(patient_data)
+                # OPTIMIZATION: Check if we can reuse cached features
+                patient_data_hash = str(sorted(patient_data.items()))
+                if (st.session_state.last_patient_data == patient_data_hash and 
+                    st.session_state.last_features is not None):
+                    X = st.session_state.last_features
+                else:
+                    X = create_feature_vector(patient_data)
+                    st.session_state.last_features = X
+                    st.session_state.last_patient_data = patient_data_hash
 
-                # Make prediction with Model 1 (use only predict_proba for speed)
-                y_pred_proba = model1.predict_proba(X)[0]
+                # OPTIMIZATION: Predict using DMatrix
+                y_pred_proba = predict_with_model(model1, X, use_dmatrix=True)
+
+                # Handle potential shape issues
+                if len(y_pred_proba.shape) > 1:
+                    y_pred_proba = y_pred_proba[0]
+                
                 y_pred = np.argmax(y_pred_proba)
 
                 # Get top 5 predictions
                 top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
 
-                # Check if "Other_Viruses" (class 15) is in top 5
+                # OPTIMIZATION: Lazy load Model 2 only if "Other_Viruses" in top 5
                 other_virus_in_top5 = 15 in top_5_indices
                 second_model_results = None
                 
                 if other_virus_in_top5:
-                    # Run second model for sub-classification (use only predict_proba)
-                    y_pred_proba_m2 = model2.predict_proba(X)[0]
-                    y_pred_m2 = np.argmax(y_pred_proba_m2)
-                    top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
-                    
-                    second_model_results = {
-                        'prediction': y_pred_m2,
-                        'probabilities': y_pred_proba_m2,
-                        'top_5': top_5_indices_m2
-                    }
+                    model2 = load_secondary_model()  # Lazy load
+                    if model2 is not None:
+                        # Run second model for sub-classification
+                        y_pred_proba_m2 = predict_with_model(model2, X, use_dmatrix=True)
+                        
+                        # Handle potential shape issues
+                        if len(y_pred_proba_m2.shape) > 1:
+                            y_pred_proba_m2 = y_pred_proba_m2[0]
+                        
+                        y_pred_m2 = np.argmax(y_pred_proba_m2)
+                        top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
+                        
+                        second_model_results = {
+                            'prediction': y_pred_m2,
+                            'probabilities': y_pred_proba_m2,
+                            'top_5': top_5_indices_m2
+                        }
 
                 # Display results
                 st.success("✅ Prediction Complete!")
@@ -412,7 +538,10 @@ def main():
                 st.markdown("---")
                 st.subheader("📈 Probability Distribution")
                 
-                tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"]) if second_model_results else st.tabs(["Model 1 (Major Classes)"])
+                if second_model_results:
+                    tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"])
+                else:
+                    tab1 = st.tabs(["Model 1 (Major Classes)"])[0]
                 
                 with tab1:
                     st.write("**Top 10 Major Virus Categories**")
@@ -453,6 +582,7 @@ def main():
                 st.error(f"Prediction error: {e}")
                 import traceback
                 st.error(traceback.format_exc())
+
 
 if __name__ == "__main__":
     main()
