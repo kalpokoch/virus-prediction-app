@@ -88,7 +88,7 @@ def load_model():
     try:
         with open('models/xgb_filtered_model.pkl', 'rb') as f:
             model1 = pickle.load(f)
-        with open('models/xgb_filtered_M2_model.pkl', 'rb') as f:
+        with open('models/xgb_filtered_model2.pkl', 'rb') as f:
             model2 = pickle.load(f)
         return model1, model2
     except Exception as e:
