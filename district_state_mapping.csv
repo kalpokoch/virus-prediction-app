@@ -1,36 +1,93 @@
 district_encoded,district_name,state
 0,Adilabad,Uttar Pradesh
+0,Hanamkonda,Telangana
+0,Jagtial,Telangana
+0,Jangaon,Telangana
+0,Jayashankar Bhupalpally,Telangana
+0,Jogulamba Gadwal,Telangana
+0,Mahabubabad,Telangana
+0,Mahbubnagar,Telangana
+0,Medchal-Malkajgiri,Telangana
+0,Mulugu,Telangana
+0,Nagarkurnool,Telangana
+0,Peddapalli,Telangana
+0,Rajanna Sircilla,Telangana
+0,Kumuram Bheem Asifabad,Telangana
 1,Agar-Malwa,Tripura
+2,Shravasti,Uttar Pradesh
+2,Raebareli,Uttar Pradesh
+2,Maharajganj,Uttar Pradesh
+2,Lakhimpur Kheri,Uttar Pradesh
+2,Barabanki,Uttar Pradesh
 2,Agra,Rajasthan
 3,Ahilyanagar,Delhi
+4,Vav-Tharad,Gujarat
 4,Ahmedabad,Gujarat
+4,Sabarkantha,Gujarat
+4,Mehsana,Gujarat
+4,Kutch,Gujarat
+4,Dang,Gujarat
+4,Chhota Udaipur,Gujarat
+4,Banaskantha,Gujarat
+4,Aravalli,Gujarat
+4,Panchmahal,Gujarat
+5,Khawzawl,Mizoram
 5,Aizawl,Mizoram
+5,Hnahthial,Mizoram
+5,Saiha,Mizoram
+6,Phalodi,Rajasthan
+6,Didwana Kuchaman,Rajasthan
+6,Sri Ganganagar,Rajasthan
 6,Ajmer,Rajasthan
+6,Deeg,Rajasthan
 7,Akola,Maharashtra
 8,Alappuzha,Kerala
 9,Aligarh,Uttar Pradesh
 10,Alipurduar,West Bengal
 11,Alirajpur,Gujarat
+12,Dr. B.R. Ambedkar Konaseema,Andhra Pradesh
 12,Alluri Sitharama Raju,Uttar Pradesh
+12,YSR Kadapa,Andhra Pradesh
+12,Nellore,Andhra Pradesh
+12,NTR,Andhra Pradesh
+13,Rudraprayag,Uttarakhand
+13,Udham Singh Nagar,Uttarakhand
+13,Uttarkashi,Uttarakhand
 13,Almora,Uttarakhand
 14,Alwar,Rajasthan
+15,Hansi,Haryana
 15,Ambala,Chandigarh
 16,Ambedkar Nagar,Uttar Pradesh
 17,Amethi,Uttar Pradesh
 18,Amravati,Maharashtra
 19,Amreli,Maharashtra
 20,Amritsar,Haryana
+20,Firozpur,Punjab
+20,Sahibzada Ajit Singh Nagar,Punjab
 21,Amroha,Uttar Pradesh
 22,Anakapalli,Andhra Pradesh
 23,Anand,Gujarat
 24,Ananthapuramu,Andhra Pradesh
 25,Anantnag,Jammu And Kashmir
 26,Anjaw,Assam
+26,Lepa Rada,Arunachal Pradesh
+26,Pakke-Kessang,Arunachal Pradesh
+26,Upper Dibang Valley,Arunachal Pradesh
 27,Annamayya,Puducherry
 28,Anugul,Odisha
 29,Anuppur,Madhya Pradesh
+30,West Champaran,Bihar
+30,Kaimur,Bihar
 30,Araria,Bihar
+30,East Champaran,Bihar
+31,Thoothukudi,Tamil Nadu
+31,Nilgiris,Tamil Nadu
+31,Tiruvallur,Tamil Nadu
+31,Kanyakumari,Tamil Nadu
+31,Kanchipuram,Tamil Nadu
 31,Ariyalur,Tamil Nadu
+31,Tiruvarur,Tamil Nadu
+31,Tirupattur,Tamil Nadu
 32,Arvalli,Gujarat
 33,Arwal,Bihar
 34,Ashoknagar,Madhya Pradesh
@@ -42,6 +99,9 @@ district_encoded,district_name,state
 40,Bageshwar,Uttarakhand
 41,Baghpat,Haryana
 42,Bahraich,Haryana
+43,South Salmara-Mankachar,Assam
+43,Morigaon,Assam
+43,Kamrup Metropolitan,Assam
 43,Bajali,Uttar Pradesh
 44,Baksa,Assam
 45,Balaghat,Maharashtra
@@ -50,6 +110,17 @@ district_encoded,district_name,state
 48,Ballari,Karnataka
 49,Ballia,Uttar Pradesh
 50,Balod,Haryana
+50,Sarangarh-Bilaigarh,Chhattisgarh
+50,Sakti,Chhattisgarh
+50,Mohla-Manpur-Ambagarh Chowki,Chhattisgarh
+50,Manendragarh-Chirmiri-Bharatpur,Chhattisgarh
+50,Khairagarh-Chhuikhadan-Gandai,Chhattisgarh
+50,Kanker,Chhattisgarh
+50,Kabirdham,Chhattisgarh
+50,Gariaband,Chhattisgarh
+50,Dantewada,Chhattisgarh
+50,Balrampur-Ramanujganj,Chhattisgarh
+50,Baloda Bazar,Chhattisgarh
 51,Balodabazar-Bhatapara,Chhattisgarh
 52,Balotra,Karnataka
 53,Balrampur,Uttar Pradesh
@@ -103,6 +174,10 @@ district_encoded,district_name,state
 101,Bishnupur,Manipur
 102,Biswanath,Assam
 103,Bokaro,Jharkhand
+103,Hazaribag,Jharkhand
+103,Sahibganj,Jharkhand
+103,East Singhbhum,Jharkhand
+103,Seraikela-Kharsawan,Jharkhand
 104,Bongaigaon,Assam
 105,Botad,Gujarat
 106,Boudh,Odisha
@@ -192,6 +267,7 @@ district_encoded,district_name,state
 190,Durg,Madhya Pradesh
 191,East,Sikkim
 192,East Garo Hills,Meghalaya
+192,Eastern West Khasi Hills,Meghalaya
 193,East Godavari,Andhra Pradesh
 194,East Jaintia Hills,Meghalaya
 195,East Kameng,Arunachal Pradesh
@@ -218,7 +294,9 @@ district_encoded,district_name,state
 216,Ganderbal,Jammu And Kashmir
 217,Gandhinagar,Uttarakhand
 218,Ganganagar,Odisha
+219,Gyalshing,Sikkim
 219,Gangtok,Sikkim
+219,Pakyong,Sikkim
 220,Ganjam,Odisha
 221,Garhwa,Uttar Pradesh
 222,Gariyaband,Rajasthan
@@ -325,6 +403,8 @@ district_encoded,district_name,state
 323,Kanpur Nagar,Uttar Pradesh
 324,Kapurthala,Punjab
 325,Karaikal,Gujarat
+325,Yanam,Puducherry
+325,Mahe,Puducherry
 326,Karauli,Rajasthan
 327,Karbi Anglong,Assam
 328,Kargil,Jammu And Kashmir
@@ -740,3 +820,28 @@ district_encoded,district_name,state
 738,Yamunanagar,Chandigarh
 739,Yavatmal,Maharashtra
 740,Zunheboto,Meghalaya
+741,Nicobar,Andaman And Nicobar Islands
+741,South Andaman,Andaman And Nicobar Islands
+742,Kushavati,Goa
+743,Bagalkot,Karnataka
+743,Bangalore Rural,Karnataka
+743,Bangalore Urban,Karnataka
+743,Chikkaballapur,Karnataka
+743,Chikmagalur,Karnataka
+743,Mysore,Karnataka
+743,Shimoga,Karnataka
+744,Mauganj,Madhya Pradesh
+744,Narsinghpur,Madhya Pradesh
+744,Hoshangabad,Madhya Pradesh
+744,Agar Malwa,Madhya Pradesh
+744,Khandwa,Madhya Pradesh
+744,Khargone,Madhya Pradesh
+745,Mumbai City,Maharashtra
+745,Osmanabad,Maharashtra
+745,Ahmednagar,Maharashtra
+746,Balasore,Odisha
+746,Debagarh,Odisha
+746,Jagatsinghpur,Odisha
+746,Jajpur,Odisha
+746,Angul,Odisha
+746,Subarnapur,Odisha
