@@ -91,7 +91,7 @@ MONTH_TO_DAY = {1: 15, 2: 45, 3: 74, 4: 105, 5: 135, 6: 166, 7: 196, 8: 227, 9: 
 def load_model():
     """Load the trained XGBoost models"""
     try:
-        with open('models/xgb_filtered_model.pkl', 'rb') as f:
+        with open('models/XGB_M1_16JAN.pkl', 'rb') as f:
             model1 = pickle.load(f)
         with open('models/xgb_filtered_model2.pkl', 'rb') as f:
             model2 = pickle.load(f)
