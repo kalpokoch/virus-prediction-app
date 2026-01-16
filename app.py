@@ -140,7 +140,7 @@ def create_feature_vector(patient_data):
     else: agegroup = 4
 
     # Pre-defined symptom indices for fast array slicing
-    respiratory_idx = [symptom_cols.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']]
+    respiratory_idx = [symptom_cols.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORE THROAT']]
     gi_idx = [symptom_cols.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINAL PAIN']]
     neuro_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'ALTERED SENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECK RIGIDITY', 'IRRITABILITY']]
     skin_idx = [symptom_cols.index(s) for s in ['PAPULAR RASH', 'PUSTULAR RASH', 'MACULOPAPULAR RASH', 'BULLAE']]
@@ -225,7 +225,7 @@ def create_feature_vector(patient_data):
         symptoms[symptom_cols.index('BREATHLESSNESS')],
         symptoms[symptom_cols.index('COUGH')],
         symptoms[symptom_cols.index('RHINORRHEA')],
-        symptoms[symptom_cols.index('SORETHROAT')],
+        symptoms[symptom_cols.index('SORE THROAT')],
         symptoms[symptom_cols.index('BULLAE')],
         symptoms[symptom_cols.index('PAPULAR RASH')],
         symptoms[symptom_cols.index('PUSTULAR RASH')],
