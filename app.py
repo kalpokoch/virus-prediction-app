@@ -66,14 +66,14 @@ OTHER_VIRUS_MAPPING = {
 
 # Symptom groups
 SYMPTOM_GROUPS = {
-    "Neurological": ['HEADACHE', 'IRRITABLITY', 'ALTEREDSENSORIUM', 'SOMNOLENCE', 
-                     'NECKRIGIDITY', 'SEIZURES'],
-    "Gastrointestinal": ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN'],
+    "Neurological": ['HEADACHE', 'IRRITABILITY', 'ALTERED SENSORIUM', 'SOMNOLENCE', 
+                     'NECK RIGIDITY', 'SEIZURES'],
+    "Gastrointestinal": ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINAL PAIN'],
     "Systemic": ['MALAISE', 'MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'FEVER'],
-    "Respiratory": ['BREATHLESSNESS', 'COUGH', 'RHINORRHEA', 'SORETHROAT'],
-    "Dermatological": ['BULLAE', 'PAPULARRASH', 'PUSTULARRASH', 'MUSCULARRASH', 
-                       'MACULOPAPULARRASH', 'ESCHAR'],
-    "Hepatic/Other": ['DARKURINE', 'HEPATOMEGALY', 'JAUNDICE'],
+    "Respiratory": ['BREATHLESSNESS', 'COUGH', 'RHINORRHEA', 'SORE THROAT'],
+    "Dermatological": ['BULLAE', 'PAPULAR RASH', 'PUSTULAR RASH', 'MUSCULAR RASH', 
+                       'MACULOPAPULAR RASH', 'ESCHAR'],
+    "Hepatic/Other": ['DARK URINE', 'HEPATOMEGALY', 'JAUNDICE'],
     "Ocular": ['RED EYE', 'DISCHARGE EYES', 'CRUSHING EYES']
 }
 
@@ -232,7 +232,7 @@ def create_feature_vector(patient_data):
         symptoms[symptom_cols.index('MUSCULAR RASH')],
         symptoms[symptom_cols.index('MACULOPAPULAR RASH')],
         symptoms[symptom_cols.index('ESCHAR')],
-        symptoms[symptom_cols.index('DARKURINE')],
+        symptoms[symptom_cols.index('DARK URINE')],
         symptoms[symptom_cols.index('HEPATOMEGALY')],
         symptoms[symptom_cols.index('RED EYE')],
         symptoms[symptom_cols.index('DISCHARGE EYES')],
