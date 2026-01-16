@@ -141,11 +141,11 @@ def create_feature_vector(patient_data):
 
     # Pre-defined symptom indices for fast array slicing
     respiratory_idx = [symptom_cols.index(s) for s in ['COUGH', 'BREATHLESSNESS', 'RHINORRHEA', 'SORETHROAT']]
-    gi_idx = [symptom_cols.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINALPAIN']]
-    neuro_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'ALTEREDSENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECKRIGIDITY', 'IRRITABLITY']]
-    skin_idx = [symptom_cols.index(s) for s in ['PAPULARRASH', 'PUSTULARRASH', 'MACULOPAPULARRASH', 'BULLAE']]
+    gi_idx = [symptom_cols.index(s) for s in ['DIARRHEA', 'DYSENTERY', 'NAUSEA', 'VOMITING', 'ABDOMINAL PAIN']]
+    neuro_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'ALTERED SENSORIUM', 'SEIZURES', 'SOMNOLENCE', 'NECK RIGIDITY', 'IRRITABILITY']]
+    skin_idx = [symptom_cols.index(s) for s in ['PAPULAR RASH', 'PUSTULAR RASH', 'MACULOPAPULAR RASH', 'BULLAE']]
     systemic_idx = [symptom_cols.index(s) for s in ['MYALGIA', 'ARTHRALGIA', 'CHILLS', 'RIGORS', 'MALAISE']]
-    count_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORETHROAT']]
+    count_idx = [symptom_cols.index(s) for s in ['HEADACHE', 'FEVER', 'COUGH', 'VOMITING', 'DIARRHEA', 'MYALGIA', 'ARTHRALGIA', 'NAUSEA', 'BREATHLESSNESS', 'SORE THROAT']]
 
     # Symptom group sums (vectorized)
     respiratory_symptoms = symptoms[respiratory_idx].sum()
@@ -209,10 +209,10 @@ def create_feature_vector(patient_data):
 
         # Symptoms (33) - in exact training order
         symptoms[symptom_cols.index('HEADACHE')],
-        symptoms[symptom_cols.index('IRRITABLITY')],
-        symptoms[symptom_cols.index('ALTEREDSENSORIUM')],
+        symptoms[symptom_cols.index('IRRITABILITY')],
+        symptoms[symptom_cols.index('ALTERED SENSORIUM')],
         symptoms[symptom_cols.index('SOMNOLENCE')],
-        symptoms[symptom_cols.index('NECKRIGIDITY')],
+        symptoms[symptom_cols.index('NECK RIGIDITY')],
         symptoms[symptom_cols.index('SEIZURES')],
         symptoms[symptom_cols.index('DIARRHEA')],
         symptoms[symptom_cols.index('DYSENTERY')],
@@ -227,10 +227,10 @@ def create_feature_vector(patient_data):
         symptoms[symptom_cols.index('RHINORRHEA')],
         symptoms[symptom_cols.index('SORETHROAT')],
         symptoms[symptom_cols.index('BULLAE')],
-        symptoms[symptom_cols.index('PAPULARRASH')],
-        symptoms[symptom_cols.index('PUSTULARRASH')],
-        symptoms[symptom_cols.index('MUSCULARRASH')],
-        symptoms[symptom_cols.index('MACULOPAPULARRASH')],
+        symptoms[symptom_cols.index('PAPULAR RASH')],
+        symptoms[symptom_cols.index('PUSTULAR RASH')],
+        symptoms[symptom_cols.index('MUSCULAR RASH')],
+        symptoms[symptom_cols.index('MACULOPAPULAR RASH')],
         symptoms[symptom_cols.index('ESCHAR')],
         symptoms[symptom_cols.index('DARKURINE')],
         symptoms[symptom_cols.index('HEPATOMEGALY')],
@@ -239,7 +239,7 @@ def create_feature_vector(patient_data):
         symptoms[symptom_cols.index('CRUSHING EYES')],
         symptoms[symptom_cols.index('JAUNDICE')],
         fever,
-        symptoms[symptom_cols.index('ABDOMINALPAIN')],
+        symptoms[symptom_cols.index('ABDOMINAL PAIN')],
         symptoms[symptom_cols.index('VOMITING')],
 
         # Geo-temporal (10)
