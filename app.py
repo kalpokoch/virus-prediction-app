@@ -327,7 +327,7 @@ def main():
     # Temporal features
     patient_data['month'] = st.sidebar.selectbox("Month of Illness", options=list(range(1, 13)), 
                                                   format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
-    patient_data['year'] = st.sidebar.number_input("Year", min_value=2012, max_value=2026, value=2024)
+    patient_data['year'] = st.sidebar.number_input("Year", min_value=2012, max_value=2026, value=datetime.now().year)
 
 
     # Main area for symptoms
