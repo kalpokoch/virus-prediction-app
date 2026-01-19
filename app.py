@@ -265,236 +265,287 @@ def create_feature_vector(patient_data):
 
 
 def main():
-    # Display logos at the top (matching the first code's layout)
+    # Top logos
     col1, col2, col3 = st.columns([1, 3, 1])
     with col1:
-        st.image("logo_1.jpeg", width=300)
+        try:
+            st.image("logo_1.jpeg", width=300)
+        except:
+            st.write("")  # Skip if image not found
     with col3:
-        st.image("Amity_logo2.png", width=250)
+        try:
+            st.image("Amity_logo2.png", width=250)
+        except:
+            st.write("")  # Skip if image not found
     with col2:
-        st.image("logo_2.jpeg", width=250)
+        try:
+            st.image("logo_2.jpeg", width=250)
+        except:
+            st.write("")  # Skip if image not found
+    
+    # Sidebar navigation
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to:", ["Home", "Prediction", "About"])
 
-    st.title("🦠 Virus Detection and Classification System")
-    st.markdown("---")
-    st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
+    if page == "Home":
+        st.markdown(
+            "<h1 style='text-align: center;'>🦠 Virus Detection and Classification System</h1>",
+            unsafe_allow_html=True)
+        st.markdown(
+            "<h2 style='text-align: center;'>Advanced AI-Powered Diagnostic Tool for Viral Infections</h2>",
+            unsafe_allow_html=True)
+        st.write("""
+        Welcome to the Virus Detection and Classification System!
+        
+        This advanced AI-driven system assists healthcare professionals by analyzing patient symptoms 
+        and demographic information to predict the most probable viral infection from a comprehensive 
+        database of 26+ virus categories.
+        
+        **Key Features:**
+        - **Dual-Model Architecture**: Primary classification for major virus categories and secondary classification for "Other Viruses"
+        - **Comprehensive Symptom Analysis**: Covers neurological, gastrointestinal, respiratory, dermatological, and systemic symptoms
+        - **Geo-temporal Intelligence**: Incorporates seasonal patterns and geographical factors
+        - **Real-time Predictions**: Instant probability scores and confidence metrics
+        
+        Navigate to the **Prediction** page using the sidebar to input patient details 
+        and get comprehensive virus classification results.
+        """)
+        st.warning("**Medical Disclaimer**: This system is designed to assist healthcare professionals and should not be used as a substitute for professional medical diagnosis, treatment, or advice. Always consult qualified medical personnel for patient care decisions.")
 
+    elif page == "About":
+        st.title("About Virus Detection System")
+        st.write("""
+        ### System Overview
+        This application utilizes advanced machine learning techniques to analyze patient symptoms 
+        and predict viral infections with high accuracy.
+        
+        ### Technical Specifications
+        - **Primary Model**: XGBoost classifier for 26 major virus categories
+        - **Secondary Model**: Specialized classifier for "Other Viruses" subcategorization  
+        - **Feature Engineering**: 80+ engineered features including temporal, geographical, and symptom interaction variables
+        - **Optimization**: Cached models and pre-computed lookup tables for real-time performance
+        
+        ### Supported Virus Categories
+        The system can identify and classify the following major virus categories:
+        - Dengue Virus, Chikungunya Virus, Japanese Encephalitis
+        - Hepatitis A/B/C/E Viruses
+        - Influenza variants (H1N1, H3N2, Victoria)
+        - Respiratory viruses (RSV, Adenovirus, SARS-CoV-2)
+        - And many more...
+        
+        ### Data Sources
+        The models are trained on comprehensive clinical datasets with proper encoding 
+        for states, districts, and symptom combinations to ensure accurate predictions 
+        across different geographical regions.
+        """)
+        st.warning("**Medical Disclaimer**: This system provides diagnostic assistance and should not replace professional medical evaluation and treatment decisions.")
 
-    # Load models and mappings
-    model1, model2 = load_model()
-    if model1 is None or model2 is None:
-        st.error("Failed to load models. Please check the model file paths.")
-        return
+    elif page == "Prediction":
+        st.title("🦠 Virus Detection and Classification System")
+        st.markdown("---")
+        st.write("Enter patient information and clinical symptoms to predict the most likely virus.")
 
-    state_map, district_map, district_state_map = load_mappings()
-    if state_map is None or district_map is None or district_state_map is None:
-        st.error("Failed to load mapping files. Please check the CSV files.")
-        return
+        # Load models and mappings
+        model1, model2 = load_model()
+        if model1 is None or model2 is None:
+            st.error("Failed to load models. Please check the model file paths.")
+            return
 
+        state_map, district_map, district_state_map = load_mappings()
+        if state_map is None or district_map is None or district_state_map is None:
+            st.error("Failed to load mapping files. Please check the CSV files.")
+            return
 
-    # Sidebar for patient demographics
-    st.sidebar.header("📋 Patient Information")
+        # Sidebar for patient demographics
+        st.sidebar.header("📋 Patient Information")
 
+        # Sidebar for patient demographics
+        st.sidebar.header("📋 Patient Information")
 
-    patient_data = {}
+        patient_data = {}
 
+        # Demographics (MATCH EXACT TRAINING COLUMN NAMES)
+        patient_data['age'] = st.sidebar.number_input("Age", min_value=0, max_value=120, value=30)
+        patient_data['SEX'] = st.sidebar.selectbox("Sex", options=[0, 1], 
+                                                    format_func=lambda x: "Female" if x == 0 else "Male")
+        patient_data['PATIENTTYPE'] = st.sidebar.selectbox("Patient Type", options=[0, 1], 
+                                                            format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
+        patient_data['durationofillness'] = st.sidebar.number_input("Duration of Illness (days)", 
+                                                                     min_value=0, max_value=365, value=3)
 
-    # Demographics (MATCH EXACT TRAINING COLUMN NAMES)
-    patient_data['age'] = st.sidebar.number_input("Age", min_value=0, max_value=120, value=30)
-    patient_data['SEX'] = st.sidebar.selectbox("Sex", options=[0, 1], 
-                                                format_func=lambda x: "Female" if x == 0 else "Male")
-    patient_data['PATIENTTYPE'] = st.sidebar.selectbox("Patient Type", options=[0, 1], 
-                                                        format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
-    patient_data['durationofillness'] = st.sidebar.number_input("Duration of Illness (days)", 
-                                                                 min_value=0, max_value=365, value=3)
+        # State selection with names
+        state_names = state_map['state_name'].tolist()
+        selected_state_name = st.sidebar.selectbox("State", options=state_names, index=0)
+        patient_data['labstate'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
 
-    # State selection with names
-    state_names = state_map['state_name'].tolist()
-    selected_state_name = st.sidebar.selectbox("State", options=state_names, index=0)
-    patient_data['labstate'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
+        # District selection filtered by state
+        filtered_districts = district_state_map[district_state_map['state'] == selected_state_name]
+        district_names = filtered_districts['district_name'].tolist()
 
-    # District selection filtered by state
-    filtered_districts = district_state_map[district_state_map['state'] == selected_state_name]
-    district_names = filtered_districts['district_name'].tolist()
+        if len(district_names) > 0:
+            selected_district_name = st.sidebar.selectbox("District", options=district_names, index=0)
+            patient_data['districtencoded'] = int(filtered_districts[filtered_districts['district_name'] == selected_district_name]['district_encoded'].values[0])
+        else:
+            st.sidebar.warning("No districts available for selected state")
+            patient_data['districtencoded'] = 0
 
-    if len(district_names) > 0:
-        selected_district_name = st.sidebar.selectbox("District", options=district_names, index=0)
-        patient_data['districtencoded'] = int(filtered_districts[filtered_districts['district_name'] == selected_district_name]['district_encoded'].values[0])
-    else:
-        st.sidebar.warning("No districts available for selected state")
-        patient_data['districtencoded'] = 0
+        # Temporal features
+        patient_data['month'] = st.sidebar.selectbox("Month of Illness", options=list(range(1, 13)), 
+                                                      format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
+        patient_data['year'] = st.sidebar.number_input("Year", min_value=2012, max_value=2026, value=datetime.now().year)
 
+        # Main area for symptoms
+        st.header("🩺 Clinical Symptoms")
+        st.write("Select all symptoms present in the patient:")
 
-    # Temporal features
-    patient_data['month'] = st.sidebar.selectbox("Month of Illness", options=list(range(1, 13)), 
-                                                  format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
-    patient_data['year'] = st.sidebar.number_input("Year", min_value=2012, max_value=2026, value=datetime.now().year)
+        for group_name, symptoms in SYMPTOM_GROUPS.items():
+            with st.expander(f"**{group_name} Symptoms**", expanded=True):
+                cols = st.columns(3)
+                for idx, symptom in enumerate(symptoms):
+                    with cols[idx % 3]:
+                        patient_data[symptom] = 1 if st.checkbox(symptom.replace('_', ' ').title(), key=symptom) else 0
 
+        st.markdown("---")
 
-    # Main area for symptoms
-    st.header("🩺 Clinical Symptoms")
-    st.write("Select all symptoms present in the patient:")
+        # Prediction button
+        if st.button("🔍 Predict Virus", type="primary", use_container_width=True):
+            with st.spinner("Analyzing patient data..."):
+                try:
+                    # Create feature vector
+                    X = create_feature_vector(patient_data)
 
+                    # Make prediction with Model 1 (use only predict_proba for speed)
+                    y_pred_proba = model1.predict_proba(X)[0]
+                    y_pred = np.argmax(y_pred_proba)
 
-    for group_name, symptoms in SYMPTOM_GROUPS.items():
-        with st.expander(f"**{group_name} Symptoms**", expanded=True):
-            cols = st.columns(3)
-            for idx, symptom in enumerate(symptoms):
-                with cols[idx % 3]:
-                    patient_data[symptom] = 1 if st.checkbox(symptom.replace('_', ' ').title(), key=symptom) else 0
+                    # Get top 5 predictions
+                    top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
 
+                    # Check if "Other_Viruses" (class 15) is in top 5
+                    other_virus_in_top5 = 15 in top_5_indices
+                    second_model_results = None
 
-    st.markdown("---")
+                    if other_virus_in_top5:
+                        # Run second model for sub-classification (use only predict_proba)
+                        y_pred_proba_m2 = model2.predict_proba(X)[0]
+                        y_pred_m2 = np.argmax(y_pred_proba_m2)
+                        top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
 
+                        second_model_results = {
+                            'prediction': y_pred_m2,
+                            'probabilities': y_pred_proba_m2,
+                            'top_5': top_5_indices_m2
+                        }
 
-    # Prediction button
-    if st.button("🔍 Predict Virus", type="primary", use_container_width=True):
-        with st.spinner("Analyzing patient data..."):
-            try:
-                # Create feature vector
-                X = create_feature_vector(patient_data)
+                    # Display results
+                    st.success("✅ Prediction Complete!")
 
+                    col1, col2 = st.columns([1, 1])
 
-                # Make prediction with Model 1 (use only predict_proba for speed)
-                y_pred_proba = model1.predict_proba(X)[0]
-                y_pred = np.argmax(y_pred_proba)
+                    with col1:
+                        st.subheader("🎯 Most Likely Virus")
 
-
-                # Get top 5 predictions
-                top_5_indices = np.argsort(y_pred_proba)[-5:][::-1]
-
-
-                # Check if "Other_Viruses" (class 15) is in top 5
-                other_virus_in_top5 = 15 in top_5_indices
-                second_model_results = None
-
-                if other_virus_in_top5:
-                    # Run second model for sub-classification (use only predict_proba)
-                    y_pred_proba_m2 = model2.predict_proba(X)[0]
-                    y_pred_m2 = np.argmax(y_pred_proba_m2)
-                    top_5_indices_m2 = np.argsort(y_pred_proba_m2)[-5:][::-1]
-
-                    second_model_results = {
-                        'prediction': y_pred_m2,
-                        'probabilities': y_pred_proba_m2,
-                        'top_5': top_5_indices_m2
-                    }
-
-
-                # Display results
-                st.success("✅ Prediction Complete!")
-
-
-                col1, col2 = st.columns([1, 1])
-
-
-                with col1:
-                    st.subheader("🎯 Most Likely Virus")
-
-                    # Check if primary prediction is Other_Viruses
-                    if y_pred == 15 and second_model_results:
-                        sub_virus = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
-                        sub_confidence = second_model_results['probabilities'][second_model_results['prediction']] * 100
-                        st.metric(
-                            label="Predicted Virus",
-                            value=f"Other_Viruses → {sub_virus}",
-                            delta=f"{y_pred_proba[y_pred]*100:.2f}% (M1) | {sub_confidence:.2f}% (M2)"
-                        )
-                    else:
-                        st.metric(
-                            label="Predicted Virus",
-                            value=VIRUS_MAPPING[y_pred],
-                            delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
-                        )
-
-
-                with col2:
-                    st.subheader("📊 Top 5 Predictions (Model 1)")
-                    for rank, idx in enumerate(top_5_indices, 1):
-                        virus_name = VIRUS_MAPPING[idx]
-                        confidence = y_pred_proba[idx] * 100
-
-                        # Add indicator if this is Other_Viruses
-                        if idx == 15 and second_model_results:
+                        # Check if primary prediction is Other_Viruses
+                        if y_pred == 15 and second_model_results:
                             sub_virus = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
-                            st.write(f"{rank}. **{virus_name}** → *{sub_virus}*: {confidence:.2f}%")
+                            sub_confidence = second_model_results['probabilities'][second_model_results['prediction']] * 100
+                            st.metric(
+                                label="Predicted Virus",
+                                value=f"Other_Viruses → {sub_virus}",
+                                delta=f"{y_pred_proba[y_pred]*100:.2f}% (M1) | {sub_confidence:.2f}% (M2)"
+                            )
                         else:
-                            st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
+                            st.metric(
+                                label="Predicted Virus",
+                                value=VIRUS_MAPPING[y_pred],
+                                delta=f"{y_pred_proba[y_pred]*100:.2f}% confidence"
+                            )
 
-                # Display second model results if available
-                if second_model_results:
+                    with col2:
+                        st.subheader("📊 Top 5 Predictions (Model 1)")
+                        for rank, idx in enumerate(top_5_indices, 1):
+                            virus_name = VIRUS_MAPPING[idx]
+                            confidence = y_pred_proba[idx] * 100
+
+                            # Add indicator if this is Other_Viruses
+                            if idx == 15 and second_model_results:
+                                sub_virus = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
+                                st.write(f"{rank}. **{virus_name}** → *{sub_virus}*: {confidence:.2f}%")
+                            else:
+                                st.write(f"{rank}. **{virus_name}**: {confidence:.2f}%")
+
+                    # Display second model results if available
+                    if second_model_results:
+                        st.markdown("---")
+                        st.subheader("🔬 Other Viruses Sub-Classification (Model 2)")
+                        st.info("Since 'Other_Viruses' appeared in top 5, secondary classification was performed.")
+
+                        col3, col4 = st.columns([1, 1])
+
+                        with col3:
+                            st.write("**Top Prediction:**")
+                            top_sub = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
+                            top_conf = second_model_results['probabilities'][second_model_results['prediction']] * 100
+                            st.metric(label="Sub-Category", value=top_sub, delta=f"{top_conf:.2f}% confidence")
+
+                        with col4:
+                            st.write("**Top 5 Sub-Categories:**")
+                            for rank, idx in enumerate(second_model_results['top_5'], 1):
+                                sub_virus = OTHER_VIRUS_MAPPING[idx]
+                                sub_confidence = second_model_results['probabilities'][idx] * 100
+                                st.write(f"{rank}. **{sub_virus}**: {sub_confidence:.2f}%")
+
+                    # Display probability distribution
                     st.markdown("---")
-                    st.subheader("🔬 Other Viruses Sub-Classification (Model 2)")
-                    st.info("Since 'Other_Viruses' appeared in top 5, secondary classification was performed.")
+                    st.subheader("📈 Probability Distribution")
 
-                    col3, col4 = st.columns([1, 1])
-
-                    with col3:
-                        st.write("**Top Prediction:**")
-                        top_sub = OTHER_VIRUS_MAPPING[second_model_results['prediction']]
-                        top_conf = second_model_results['probabilities'][second_model_results['prediction']] * 100
-                        st.metric(label="Sub-Category", value=top_sub, delta=f"{top_conf:.2f}% confidence")
-
-                    with col4:
-                        st.write("**Top 5 Sub-Categories:**")
-                        for rank, idx in enumerate(second_model_results['top_5'], 1):
-                            sub_virus = OTHER_VIRUS_MAPPING[idx]
-                            sub_confidence = second_model_results['probabilities'][idx] * 100
-                            st.write(f"{rank}. **{sub_virus}**: {sub_confidence:.2f}%")
-
-
-                # Display probability distribution
-                st.markdown("---")
-                st.subheader("📈 Probability Distribution")
-
-                if second_model_results:
-                    tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"])
-                else:
-                    tabs = st.tabs(["Model 1 (Major Classes)"])
-                    tab1 = tabs[0]
-
-
-                with tab1:
-                    st.write("**Top 10 Major Virus Categories**")
-                    top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
-                    prob_df = pd.DataFrame({
-                        'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
-                        'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
-                    })
-                    st.bar_chart(prob_df.set_index('Virus'))
-
-                if second_model_results:
-                    with tab2:
-                        st.write("**Top 10 Other Virus Sub-Categories**")
-                        top_10_indices_m2 = np.argsort(second_model_results['probabilities'])[-10:][::-1]
-                        prob_df_m2 = pd.DataFrame({
-                            'Virus': [OTHER_VIRUS_MAPPING[i] for i in top_10_indices_m2],
-                            'Probability (%)': [second_model_results['probabilities'][i]*100 for i in top_10_indices_m2]
-                        })
-                        st.bar_chart(prob_df_m2.set_index('Virus'))
-
-
-                # Feature summary
-                with st.expander("📋 Input Summary"):
-                    st.write("**Patient Demographics:**")
-                    st.write(f"- Age: {patient_data['age']} years")
-                    st.write(f"- Sex: {'Male' if patient_data['SEX'] == 1 else 'Female'}")
-                    st.write(f"- Patient Type: {'Inpatient' if patient_data['PATIENTTYPE'] == 1 else 'Outpatient'}")
-                    st.write(f"- Duration: {patient_data['durationofillness']} days")
-
-
-                    active_symptoms = [k.replace('_', ' ').title() for k, v in patient_data.items() 
-                                     if k in sum(SYMPTOM_GROUPS.values(), []) and v == 1]
-                    st.write(f"\n**Active Symptoms ({len(active_symptoms)}):**")
-                    if active_symptoms:
-                        st.write(", ".join(active_symptoms))
+                    if second_model_results:
+                        tab1, tab2 = st.tabs(["Model 1 (Major Classes)", "Model 2 (Other Viruses)"])
                     else:
-                        st.write("None reported")
+                        tabs = st.tabs(["Model 1 (Major Classes)"])
+                        tab1 = tabs[0]
 
+                    with tab1:
+                        st.write("**Top 10 Major Virus Categories**")
+                        top_10_indices = np.argsort(y_pred_proba)[-10:][::-1]
+                        prob_df = pd.DataFrame({
+                            'Virus': [VIRUS_MAPPING[i] for i in top_10_indices],
+                            'Probability (%)': [y_pred_proba[i]*100 for i in top_10_indices]
+                        })
+                        st.bar_chart(prob_df.set_index('Virus'))
 
-            except Exception as e:
-                st.error(f"Prediction error: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+                    if second_model_results:
+                        with tab2:
+                            st.write("**Top 10 Other Virus Sub-Categories**")
+                            top_10_indices_m2 = np.argsort(second_model_results['probabilities'])[-10:][::-1]
+                            prob_df_m2 = pd.DataFrame({
+                                'Virus': [OTHER_VIRUS_MAPPING[i] for i in top_10_indices_m2],
+                                'Probability (%)': [second_model_results['probabilities'][i]*100 for i in top_10_indices_m2]
+                            })
+                            st.bar_chart(prob_df_m2.set_index('Virus'))
+
+                    # Feature summary
+                    with st.expander("📋 Input Summary"):
+                        st.write("**Patient Demographics:**")
+                        st.write(f"- Age: {patient_data['age']} years")
+                        st.write(f"- Sex: {'Male' if patient_data['SEX'] == 1 else 'Female'}")
+                        st.write(f"- Patient Type: {'Inpatient' if patient_data['PATIENTTYPE'] == 1 else 'Outpatient'}")
+                        st.write(f"- Duration: {patient_data['durationofillness']} days")
+
+                        active_symptoms = [k.replace('_', ' ').title() for k, v in patient_data.items() 
+                                         if k in sum(SYMPTOM_GROUPS.values(), []) and v == 1]
+                        st.write(f"\n**Active Symptoms ({len(active_symptoms)}):**")
+                        if active_symptoms:
+                            st.write(", ".join(active_symptoms))
+                        else:
+                            st.write("None reported")
+
+                    st.warning("**Medical Disclaimer**: This prediction is generated by AI and should be used only as a diagnostic aid. Always consult with qualified healthcare professionals for proper medical diagnosis and treatment decisions.")
+
+                except Exception as e:
+                    st.error(f"Prediction error: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
