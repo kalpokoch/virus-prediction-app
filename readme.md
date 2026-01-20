@@ -11,32 +11,6 @@ Advanced AI-powered virus classification from patient symptoms using dual XGBoos
 - **Database Integration**: MongoDB Atlas for prediction storage and analytics
 - **Interactive UI**: User-friendly Streamlit interface with organized symptom groups
 
-## Quick Start
-
-### Streamlit Cloud Deployment
-1. Fork this repository
-2. Connect to Streamlit Cloud
-3. Add your MongoDB Atlas connection string to app secrets:
-   ```
-   mongodb.connection_string = "mongodb+srv://username:password@cluster.mongodb.net/virus_prediction?retryWrites=true&w=majority"
-   ```
-
-### Local Development
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Configuration
-
-**MongoDB Atlas Setup** (Required for data persistence):
-1. Create free cluster at https://mongodb.com/atlas
-2. Add connection string to `.streamlit/secrets.toml`:
-   ```toml
-   [mongodb]
-   connection_string = "your_connection_string_here"
-   ```
-
 ## Model Information
 
 - **Algorithm**: XGBoost with optimized hyperparameters
