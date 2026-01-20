@@ -5,6 +5,9 @@ import pickle
 from datetime import datetime
 import xgboost as xgb
 
+# Database imports (minimal addition)
+from data_handler import save_prediction_to_db, get_db_health, get_prediction_stats
+
 
 # Page configuration
 st.set_page_config(
@@ -444,6 +447,54 @@ def main():
 
                         # Display results
                         st.success("Prediction Complete!")
+                        
+                        # Save prediction to database (minimal intrusion)
+                        try:
+                            # Prepare prediction result for database
+                            prediction_result = {
+                                'predicted_virus': VIRUS_MAPPING[y_pred],
+                                'predicted_virus_id': int(y_pred),
+                                'confidence': float(y_pred_proba[y_pred] * 100),
+                                'top_5_predictions': [
+                                    {
+                                        'virus': VIRUS_MAPPING[idx],
+                                        'virus_id': int(idx),
+                                        'confidence': float(y_pred_proba[idx] * 100)
+                                    } for idx in top_5_indices
+                                ]
+                            }
+                            
+                            # Add second model results if available
+                            if second_model_results:
+                                prediction_result['sub_classification'] = {
+                                    'predicted_sub_virus': OTHER_VIRUS_MAPPING[second_model_results['prediction']],
+                                    'predicted_sub_virus_id': int(second_model_results['prediction']),
+                                    'sub_confidence': float(second_model_results['probabilities'][second_model_results['prediction']] * 100),
+                                    'top_5_sub_predictions': [
+                                        {
+                                            'virus': OTHER_VIRUS_MAPPING[idx],
+                                            'virus_id': int(idx),
+                                            'confidence': float(second_model_results['probabilities'][idx] * 100)
+                                        } for idx in second_model_results['top_5']
+                                    ]
+                                }
+                            
+                            # Save to database (non-blocking)
+                            saved_id = save_prediction_to_db(
+                                patient_data=patient_data,
+                                prediction_result=prediction_result,
+                                model_info={'model1': 'XGB_M1_16JAN', 'model2': 'xgb_filtered_model2'}
+                            )
+                            
+                            if saved_id:
+                                st.sidebar.success(f"🗄️ Prediction saved (ID: {saved_id[:8]}...)")
+                            else:
+                                st.sidebar.warning("⚠️ Could not save prediction to database")
+                                
+                        except Exception as db_error:
+                            # Don't let database errors break the prediction display
+                            st.sidebar.warning("⚠️ Database save failed")
+                            st.sidebar.caption(f"Error: {str(db_error)[:50]}...")
 
                         col1, col2 = st.columns([1, 1])
 

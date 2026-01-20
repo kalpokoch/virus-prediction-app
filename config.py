@@ -47,6 +47,18 @@ VIRUS_MAPPING = {
     25: 'Varicella zoster virus VZV'
 }
 
+# MongoDB Configuration
+MONGODB_CONFIG = {
+    'database_name': 'virus_prediction',
+    'collections': {
+        'predictions': 'predictions',
+        'patients': 'patients', 
+        'usage_stats': 'usage_stats'
+    },
+    'connection_timeout': 10000,
+    'server_selection_timeout': 5000
+}
+
 # Symptom groups for organized display
 SYMPTOM_GROUPS = {
     'Neurological': ['HEADACHE', 'IRRITABLITY', 'ALTEREDSENSORIUM', 'SOMNOLENCE', 
