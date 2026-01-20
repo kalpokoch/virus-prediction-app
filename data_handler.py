@@ -22,7 +22,7 @@ class DataHandler:
         """Initialize database connection"""
         try:
             self.db = get_db()
-            if self.db:
+            if self.db is not None:
                 # Create indexes for better performance
                 self._create_indexes()
                 logger.info("DataHandler initialized successfully")
@@ -34,7 +34,7 @@ class DataHandler:
     def _create_indexes(self):
         """Create database indexes for better performance"""
         try:
-            if not self.db:
+            if self.db is None:
                 return
                 
             # Create indexes on frequently queried fields
@@ -81,7 +81,7 @@ class DataHandler:
             Document ID if successful, None otherwise
         """
         try:
-            if not self.db:
+            if self.db is None:
                 logger.error("Database not initialized")
                 return None
             
@@ -120,7 +120,7 @@ class DataHandler:
             Document ID if successful, None otherwise
         """
         try:
-            if not self.db:
+            if self.db is None:
                 logger.error("Database not initialized")
                 return None
             
@@ -155,7 +155,7 @@ class DataHandler:
             List of prediction records
         """
         try:
-            if not self.db:
+            if self.db is None:
                 return []
             
             collection = self.db['predictions']
@@ -187,7 +187,7 @@ class DataHandler:
             Dictionary with usage statistics
         """
         try:
-            if not self.db:
+            if self.db is None:
                 return {}
             
             predictions_collection = self.db['predictions']
@@ -248,7 +248,7 @@ class DataHandler:
     def _update_usage_stats(self):
         """Update daily usage statistics"""
         try:
-            if not self.db:
+            if self.db is None:
                 return
             
             collection = self.db['usage_stats']
@@ -276,7 +276,7 @@ class DataHandler:
         """
         try:
             # Check if we have a database instance (connection already established)
-            if not self.db:
+            if self.db is None:
                 return {
                     'status': 'error',
                     'message': 'Database instance not available',
