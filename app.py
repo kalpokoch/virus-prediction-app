@@ -367,15 +367,19 @@ def main():
         # Demographics (MATCH EXACT TRAINING COLUMN NAMES)
         patient_data['age'] = st.sidebar.number_input("Age", min_value=0, max_value=120, value=30)
         patient_data['SEX'] = st.sidebar.selectbox("Sex", options=[0, 1], 
-                                                    format_func=lambda x: "Female" if x == 0 else "Male")
+                                                    format_func=lambda x: "Female" if x == 0 else "Male", index=1)
         patient_data['PATIENTTYPE'] = st.sidebar.selectbox("Patient Type", options=[0, 1], 
-                                                            format_func=lambda x: "Outpatient" if x == 0 else "Inpatient")
+                                                            format_func=lambda x: "Outpatient" if x == 0 else "Inpatient", index=1)
         patient_data['durationofillness'] = st.sidebar.number_input("Duration of Illness (days)", 
                                                                      min_value=0, max_value=365, value=3)
 
         # State selection with names
         state_names = state_map['state_name'].tolist()
-        selected_state_name = st.sidebar.selectbox("State", options=state_names, index=0)
+        # Set Tamil Nadu as default if available, otherwise use first state
+        default_state_index = 0
+        if 'Tamil Nadu' in state_names:
+            default_state_index = state_names.index('Tamil Nadu')
+        selected_state_name = st.sidebar.selectbox("State", options=state_names, index=default_state_index)
         patient_data['labstate'] = int(state_map[state_map['state_name'] == selected_state_name]['encoded_value'].values[0])
 
         # District selection filtered by state
