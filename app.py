@@ -6,7 +6,7 @@ from datetime import datetime
 import xgboost as xgb
 
 # Database imports (minimal addition)
-from data_handler import save_prediction_to_db, get_db_health, get_prediction_stats, save_validation_to_db, save_validation_to_db
+from data_handler import save_prediction_to_db, get_db_health, get_prediction_stats, save_validation_to_db
 
 
 # Page configuration
@@ -458,6 +458,17 @@ def main():
                                 'top_5': top_5_indices_m2
                             }
 
+                        # Save prediction results to session state for validation form
+                        st.session_state['prediction_results'] = {
+                            'y_pred': y_pred,
+                            'y_pred_proba': y_pred_proba,
+                            'top_5_indices': top_5_indices,
+                            'second_model_results': second_model_results,
+                            'patient_data': patient_data.copy(),
+                            'selected_state_name': selected_state_name,
+                            'selected_district_name': selected_district_name
+                        }
+
                         # Display results
                         st.success("Prediction Complete!")
                         
@@ -498,6 +509,9 @@ def main():
                                 prediction_result=prediction_result,
                                 model_info={'model1': 'XGB_M1_16JAN', 'model2': 'xgb_filtered_model2'}
                             )
+                            
+                            # Store saved_id in session state for validation
+                            st.session_state['saved_id'] = saved_id
                             
                             if saved_id:
                                 st.sidebar.success(f"🗄️ Prediction saved (ID: {saved_id[:8]}...)")
@@ -609,87 +623,97 @@ def main():
                             else:
                                 st.write("None reported")
 
-                        # Validation Section for Medical Professionals
-                        if saved_id:  # Only show validation if prediction was saved
-                            st.markdown("---")
-                            st.subheader("🩺 Medical Validation (Optional)")
-                            st.info("Help us improve the AI model by providing the actual diagnosis. This data will be used for model validation and improvement.")
-                            
-                            # Create validation form
-                            with st.form(key=f"validation_form_{saved_id}"):
-                                col_val1, col_val2 = st.columns([2, 1])
-                                
-                                with col_val1:
-                                    # Combined dropdown with all virus options
-                                    virus_options = list(COMBINED_VIRUS_MAPPING.keys())
-                                    
-                                    selected_virus_key = st.selectbox(
-                                        "Actual Virus Diagnosis",
-                                        options=[None] + virus_options,
-                                        format_func=lambda x: "Please select the actual diagnosis..." if x is None else COMBINED_VIRUS_MAPPING[x],
-                                        help="Select the confirmed virus diagnosis from laboratory results or clinical assessment"
-                                    )
-                                
-                                with col_val2:
-                                    validation_confidence = st.selectbox(
-                                        "Confidence Level",
-                                        options=["High", "Medium", "Low"],
-                                        help="How confident are you in this diagnosis?"
-                                    )
-                                
-                                # Notes field
-                                validation_notes = st.text_area(
-                                    "Additional Notes (Optional)",
-                                    help="Any additional clinical observations or context",
-                                    placeholder="e.g., confirmed by RT-PCR, clinical presentation consistent with..."
-                                )
-                                
-                                # Submit validation button
-                                validation_submitted = st.form_submit_button(
-                                    "Submit Validation",
-                                    type="secondary",
-                                    use_container_width=True
-                                )
-                                
-                                if validation_submitted and selected_virus_key is not None:
-                                    # Save validation to database
-                                    validation_data = {
-                                        'prediction_id': saved_id,
-                                        'actual_virus_key': selected_virus_key,
-                                        'actual_virus_name': COMBINED_VIRUS_MAPPING[selected_virus_key],
-                                        'confidence_level': validation_confidence,
-                                        'notes': validation_notes,
-                                        'predicted_virus': VIRUS_MAPPING[y_pred],
-                                        'prediction_confidence': float(y_pred_proba[y_pred] * 100),
-                                        'timestamp': datetime.utcnow(),
-                                        'patient_summary': {
-                                            'age': patient_data['age'],
-                                            'sex': 'Male' if patient_data['SEX'] == 1 else 'Female',
-                                            'state': selected_state_name,
-                                            'district': selected_district_name
-                                        }
-                                    }
-                                    
-                                    try:
-                                        validation_id = save_validation_to_db(validation_data)
-                                        if validation_id:
-                                            st.success("✅ Thank you! Validation submitted successfully.")
-                                            st.balloons()
-                                            st.caption(f"Validation ID: {validation_id[:8]}...")
-                                        else:
-                                            st.error("❌ Failed to save validation. Please try again.")
-                                    except Exception as val_error:
-                                        st.error(f"❌ Validation error: {str(val_error)[:100]}...")
-                                
-                                elif validation_submitted and selected_virus_key is None:
-                                    st.warning("⚠️ Please select an actual diagnosis before submitting.")
-
                         st.warning("**Medical Disclaimer**: This prediction is generated by AI and should be used only as a diagnostic aid. Always consult with qualified healthcare professionals for proper medical diagnosis and treatment decisions.")
 
                     except Exception as e:
                         st.error(f"Prediction error: {e}")
                         import traceback
                         st.error(traceback.format_exc())
+
+        # Validation Section - Show if prediction results exist in session state
+        if 'prediction_results' in st.session_state and 'saved_id' in st.session_state and st.session_state['saved_id']:
+            st.markdown("---")
+            st.subheader("🩺 Medical Validation (Optional)")
+            st.info("Help us improve the AI model by providing the actual diagnosis. This data will be used for model validation and improvement.")
+            
+            # Get prediction results from session state
+            pred_results = st.session_state['prediction_results']
+            saved_id = st.session_state['saved_id']
+            
+            # Create validation form
+            with st.form(key=f"validation_form_{saved_id}"):
+                col_val1, col_val2 = st.columns([2, 1])
+                
+                with col_val1:
+                    # Combined dropdown with all virus options
+                    virus_options = list(COMBINED_VIRUS_MAPPING.keys())
+                    
+                    selected_virus_key = st.selectbox(
+                        "Actual Virus Diagnosis",
+                        options=[None] + virus_options,
+                        format_func=lambda x: "Please select the actual diagnosis..." if x is None else COMBINED_VIRUS_MAPPING[x],
+                        help="Select the confirmed virus diagnosis from laboratory results or clinical assessment"
+                    )
+                
+                with col_val2:
+                    validation_confidence = st.selectbox(
+                        "Confidence Level",
+                        options=["High", "Medium", "Low"],
+                        help="How confident are you in this diagnosis?"
+                    )
+                
+                # Notes field
+                validation_notes = st.text_area(
+                    "Additional Notes (Optional)",
+                    help="Any additional clinical observations or context",
+                    placeholder="e.g., confirmed by RT-PCR, clinical presentation consistent with..."
+                )
+                
+                # Submit validation button
+                validation_submitted = st.form_submit_button(
+                    "Submit Validation",
+                    type="secondary",
+                    use_container_width=True
+                )
+                
+                if validation_submitted and selected_virus_key is not None:
+                    # Save validation to database using session state data
+                    validation_data = {
+                        'prediction_id': saved_id,
+                        'actual_virus_key': selected_virus_key,
+                        'actual_virus_name': COMBINED_VIRUS_MAPPING[selected_virus_key],
+                        'confidence_level': validation_confidence,
+                        'notes': validation_notes,
+                        'predicted_virus': VIRUS_MAPPING[pred_results['y_pred']],
+                        'prediction_confidence': float(pred_results['y_pred_proba'][pred_results['y_pred']] * 100),
+                        'patient_summary': {
+                            'age': pred_results['patient_data']['age'],
+                            'sex': 'Male' if pred_results['patient_data']['SEX'] == 1 else 'Female',
+                            'state': pred_results['selected_state_name'],
+                            'district': pred_results['selected_district_name']
+                        }
+                    }
+                    
+                    try:
+                        validation_id = save_validation_to_db(validation_data)
+                        if validation_id:
+                            st.success("✅ Thank you! Validation submitted successfully.")
+                            st.balloons()
+                            st.caption(f"Validation ID: {validation_id[:8]}...")
+                            # Clear the session state after successful validation
+                            if 'prediction_results' in st.session_state:
+                                del st.session_state['prediction_results']
+                            if 'saved_id' in st.session_state:
+                                del st.session_state['saved_id']
+                        else:
+                            st.error("❌ Failed to save validation. Please try again.")
+                    except Exception as val_error:
+                        st.error(f"❌ Validation error: {str(val_error)}")
+                        # Add more detailed error info
+                        st.error(f"Full error: {val_error}")
+                
+                elif validation_submitted and selected_virus_key is None:
+                    st.warning("⚠️ Please select an actual diagnosis before submitting.")
 
 
 if __name__ == "__main__":

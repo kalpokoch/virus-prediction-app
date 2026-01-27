@@ -51,6 +51,11 @@ class DataHandler:
                 'usage_stats': [
                     ('date', -1),
                     ('prediction_count', 1)
+                ],
+                'validations': [
+                    ('prediction_id', 1),
+                    ('created_at', -1),
+                    ('actual_virus_name', 1)
                 ]
             }
             
