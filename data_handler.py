@@ -267,6 +267,87 @@ class DataHandler:
         except Exception as e:
             logger.error(f"Error updating usage stats: {e}")
     
+    def save_validation(self, validation_data: Dict) -> Optional[str]:
+        """
+        Save medical validation data to database
+        
+        Args:
+            validation_data: Validation information including actual diagnosis
+            
+        Returns:
+            Document ID if successful, None otherwise
+        """
+        try:
+            if self.db is None:
+                logger.error("Database not initialized")
+                return None
+            
+            collection = self.db['validations']
+            
+            # Prepare document with metadata
+            document = {
+                **validation_data,
+                'created_at': datetime.utcnow(),
+                'app_version': '1.0'
+            }
+            
+            # Insert validation document
+            result = collection.insert_one(document)
+            
+            logger.info(f"Validation saved with ID: {result.inserted_id}")
+            return str(result.inserted_id)
+            
+        except Exception as e:
+            logger.error(f"Error saving validation: {e}")
+            return None
+    
+    def get_validation_stats(self) -> Dict:
+        """
+        Get validation statistics for model performance analysis
+        
+        Returns:
+            Dictionary containing validation statistics
+        """
+        try:
+            if self.db is None:
+                return {'status': 'error', 'message': 'Database not initialized'}
+            
+            collection = self.db['validations']
+            
+            # Basic counts
+            total_validations = collection.count_documents({})
+            
+            # Accuracy calculation (predicted vs actual)
+            pipeline = [
+                {
+                    '$group': {
+                        '_id': {
+                            'predicted': '$predicted_virus',
+                            'actual': '$actual_virus_name'
+                        },
+                        'count': {'$sum': 1}
+                    }
+                }
+            ]
+            
+            accuracy_data = list(collection.aggregate(pipeline))
+            
+            # Calculate accuracy
+            correct_predictions = sum(1 for item in accuracy_data 
+                                    if item['_id']['predicted'] in item['_id']['actual'])
+            accuracy = (correct_predictions / total_validations * 100) if total_validations > 0 else 0
+            
+            return {
+                'status': 'success',
+                'total_validations': total_validations,
+                'accuracy_percentage': round(accuracy, 2),
+                'last_updated': datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting validation stats: {e}")
+            return {'status': 'error', 'message': str(e)}
+    
     def health_check(self) -> Dict:
         """
         Perform health check on database connection and operations
@@ -328,6 +409,10 @@ def save_prediction_to_db(patient_data: Dict, prediction_result: Dict, model_inf
     """Save prediction to database"""
     return data_handler.save_prediction(patient_data, prediction_result, model_info)
 
+def save_validation_to_db(validation_data: Dict) -> Optional[str]:
+    """Save validation to database"""
+    return data_handler.save_validation(validation_data)
+
 def get_db_health() -> Dict:
     """Get database health status"""
     return data_handler.health_check()
@@ -335,3 +420,7 @@ def get_db_health() -> Dict:
 def get_prediction_stats() -> Dict:
     """Get prediction usage statistics"""
     return data_handler.get_usage_statistics()
+
+def get_validation_stats() -> Dict:
+    """Get validation statistics"""
+    return data_handler.get_validation_stats()
