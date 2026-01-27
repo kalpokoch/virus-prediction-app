@@ -42,7 +42,9 @@ class DataHandler:
                 'predictions': [
                     ('timestamp', -1),
                     ('patient_id', 1),
-                    ('predicted_virus', 1)
+                    ('predicted_virus', 1),
+                    ('validation.validated', 1),
+                    ('validation.actual_virus_name', 1)
                 ],
                 'patients': [
                     ('patient_id', 1),
@@ -51,11 +53,6 @@ class DataHandler:
                 'usage_stats': [
                     ('date', -1),
                     ('prediction_count', 1)
-                ],
-                'validations': [
-                    ('prediction_id', 1),
-                    ('created_at', -1),
-                    ('actual_virus_name', 1)
                 ]
             }
             
@@ -274,33 +271,54 @@ class DataHandler:
     
     def save_validation(self, validation_data: Dict) -> Optional[str]:
         """
-        Save medical validation data to database
+        Save medical validation data within the prediction document
         
         Args:
             validation_data: Validation information including actual diagnosis
             
         Returns:
-            Document ID if successful, None otherwise
+            Prediction document ID if successful, None otherwise
         """
         try:
             if self.db is None:
                 logger.error("Database not initialized")
                 return None
             
-            collection = self.db['validations']
+            collection = self.db['predictions']
+            prediction_id = validation_data.get('prediction_id')
             
-            # Prepare document with metadata
-            document = {
-                **validation_data,
-                'created_at': datetime.utcnow(),
-                'app_version': '1.0'
-            }
+            if not prediction_id:
+                logger.error("No prediction_id provided in validation data")
+                return None
             
-            # Insert validation document
-            result = collection.insert_one(document)
+            # Convert string ID to ObjectId for MongoDB
+            from bson import ObjectId
+            try:
+                object_id = ObjectId(prediction_id)
+            except Exception as e:
+                logger.error(f"Invalid prediction_id format: {e}")
+                return None
             
-            logger.info(f"Validation saved with ID: {result.inserted_id}")
-            return str(result.inserted_id)
+            # Prepare validation document (remove prediction_id as it's not needed in the validation field)
+            validation_doc = {k: v for k, v in validation_data.items() if k != 'prediction_id'}
+            validation_doc['validated_at'] = datetime.utcnow()
+            validation_doc['validated'] = True
+            
+            # Update the prediction document with validation data
+            result = collection.update_one(
+                {'_id': object_id},
+                {
+                    '$set': {'validation': validation_doc},
+                    '$currentDate': {'last_updated': True}
+                }
+            )
+            
+            if result.modified_count > 0:
+                logger.info(f"Validation added to prediction ID: {prediction_id}")
+                return prediction_id
+            else:
+                logger.warning(f"No prediction found with ID: {prediction_id}")
+                return None
             
         except Exception as e:
             logger.error(f"Error saving validation: {e}")
@@ -308,45 +326,59 @@ class DataHandler:
     
     def get_validation_stats(self) -> Dict:
         """
-        Get validation statistics for model performance analysis
+        Get validation statistics for data collection and analysis
+        Note: This is for research/improvement purposes, not system accuracy calculation
         
         Returns:
-            Dictionary containing validation statistics
+            Dictionary containing validation collection statistics
         """
         try:
             if self.db is None:
                 return {'status': 'error', 'message': 'Database not initialized'}
             
-            collection = self.db['validations']
+            collection = self.db['predictions']
             
-            # Basic counts
-            total_validations = collection.count_documents({})
+            # Count total predictions with validation data
+            total_validations = collection.count_documents({'validation.validated': True})
             
-            # Accuracy calculation (predicted vs actual)
+            # Get validation distribution by actual virus
             pipeline = [
                 {
+                    '$match': {'validation.validated': True}
+                },
+                {
                     '$group': {
-                        '_id': {
-                            'predicted': '$predicted_virus',
-                            'actual': '$actual_virus_name'
-                        },
+                        '_id': '$validation.actual_virus_name',
+                        'count': {'$sum': 1}
+                    }
+                },
+                {'$sort': {'count': -1}}
+            ]
+            
+            validation_distribution = list(collection.aggregate(pipeline))
+            
+            # Get validation confidence distribution
+            confidence_pipeline = [
+                {
+                    '$match': {'validation.validated': True}
+                },
+                {
+                    '$group': {
+                        '_id': '$validation.confidence_level',
                         'count': {'$sum': 1}
                     }
                 }
             ]
             
-            accuracy_data = list(collection.aggregate(pipeline))
-            
-            # Calculate accuracy
-            correct_predictions = sum(1 for item in accuracy_data 
-                                    if item['_id']['predicted'] in item['_id']['actual'])
-            accuracy = (correct_predictions / total_validations * 100) if total_validations > 0 else 0
+            confidence_stats = list(collection.aggregate(confidence_pipeline))
             
             return {
                 'status': 'success',
                 'total_validations': total_validations,
-                'accuracy_percentage': round(accuracy, 2),
-                'last_updated': datetime.utcnow().isoformat()
+                'validation_distribution': validation_distribution,
+                'confidence_distribution': confidence_stats,
+                'last_updated': datetime.utcnow().isoformat(),
+                'note': 'This data is for research and model improvement purposes'
             }
             
         except Exception as e:
