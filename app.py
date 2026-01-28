@@ -9,13 +9,20 @@ import xgboost as xgb
 from data_handler import save_prediction_to_db, get_db_health, get_prediction_stats, save_validation_to_db
 
 
-# Page configuration
-st.set_page_config(
-    page_title="Virus Detection System",
-    page_icon="🦠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page configuration - with error handling for deployment consistency
+try:
+    st.set_page_config(
+        page_title="Virus Detection System",
+        page_icon="🦠",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except Exception as config_error:
+    # Fallback for deployment issues
+    st.set_page_config(
+        page_title="Virus Detection System",
+        layout="wide"
+    )
 
 
 # Virus mapping (26 classes after filtering)

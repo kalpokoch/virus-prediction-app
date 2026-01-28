@@ -1,0 +1,21 @@
+[global]
+# Disable development mode for stable deployment
+developmentMode = false
+
+[server]
+# Server settings for better compatibility
+port = 8501
+address = "localhost"
+baseUrlPath = ""
+
+# File watcher settings
+fileWatcherType = "auto"
+runOnSave = false
+
+[browser]
+# Browser settings to prevent CSS issues
+gatherUsageStats = false
+
+[theme]
+# Ensure consistent theming
+base = "light"
